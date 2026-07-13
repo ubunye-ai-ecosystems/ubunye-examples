@@ -1,5 +1,7 @@
-__pycache__/
 *.pyc
-.ubunye/
 .databricks/
+.ubunye/
 .venv/
+__pycache__/
+metastore_db/
+spark-warehouse/
