@@ -8,6 +8,11 @@ no cloud storage to configure.
 They install the engine from PyPI (`ubunye-engine==0.3.0`), so what you run here is
 what you get from `pip install` — not some unreleased branch.
 
+**Every example in this repo has been run on real Databricks.** Not validated,
+not reviewed — run, with the output inspected. Three of the bugs that fixing
+found are described in the commit history, because none of them could have been
+caught by reading the code.
+
 ---
 
 ## The abstraction
@@ -31,7 +36,7 @@ task. They differ in what `transformations.py` says, not in shape.
 | | Example | Reads | Shows |
 |---|---|---|---|
 | **01** | [Structured — tables + SQL](examples/01_ingest_tables_sql) | `samples.bakehouse` | Reading a table *and* pushing a join down as SQL; writing with `merge` (safe to re-run) and `overwrite_partitions` (safe to backfill) |
-| **02** | Structured — REST API | *(pending)* | The `rest_api` connector: auth, pagination, rate limiting |
+| **02** | [Structured — REST API](examples/02_ingest_rest_api) | Open-Meteo public API | The `rest_api` connector: query params, rate limiting, retries — and fanning one JSON document out into 168 rows |
 | **03** | [Unstructured — text + files](examples/03_ingest_unstructured) | 204 real customer reviews, plus `.txt` files on a volume | Spark's `binaryFile` source; chunking text into overlapping windows for embedding |
 | **04** | [ML — the full lifecycle](examples/04_ml_taxi_fare) | `samples.nyctaxi.trips` | Two tasks: **produce a model**, then **use it** |
 

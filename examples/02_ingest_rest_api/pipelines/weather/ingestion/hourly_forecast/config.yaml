@@ -1,0 +1,74 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Structured ingestion from a public REST API.
+#
+# Open-Meteo publishes hourly weather forecasts. No key, no signup, no quota.
+#
+# Two things this example had to learn the hard way, both of them general:
+#
+# 1. Serverless restricts outbound internet to trusted domains, and which domains
+#    is undocumented. api.open-meteo.com works; raw.githubusercontent.com does
+#    NOT. Verified by running scripts/verify_egress.py on the cluster rather than
+#    by hoping. This is why no example here downloads its own data.
+#
+# 2. The reader infers a Spark schema from the JSON, and inference is fragile in
+#    exactly one place: an array holding more than one type. The first version of
+#    this example ingested USGS earthquakes, whose GeoJSON encodes position as
+#    [longitude, latitude, depth] — two doubles and an integer. Spark cannot merge
+#    DoubleType and LongType inside one array and the run dies with
+#    CANNOT_INFER_TYPE_FOR_FIELD. No config option fixes that. An API whose arrays
+#    are consistently typed does.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    forecast:
+      format: rest_api
+      url: "https://api.open-meteo.com/v1/forecast"
+      method: GET
+      params:
+        latitude: -26.2041 # Johannesburg
+        longitude: 28.0473
+        hourly: "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,surface_pressure"
+        timezone: "Africa/Johannesburg"
+        forecast_days: 7
+
+      # No `response.root_key`: Open-Meteo returns ONE document, not a list of
+      # records. The reader wraps it as a single row whose columns are nested
+      # arrays — 168 hours of temperature in one cell. Fanning that out into rows
+      # is transformations.py's job, and it is the whole reason this task has one.
+
+      # Someone else's free API. Retry what is worth retrying — rate limiting and
+      # a momentary outage — and nothing else. A 404 will still be a 404.
+      rate_limit:
+        requests_per_second: 2
+        retry_on: [429, 503]
+        max_retries: 3
+
+  transform: {}
+
+  outputs:
+    # `merge` on (city, observed_at): the forecast is a rolling 7-day window, so
+    # consecutive runs overlap by six days. Appending would duplicate almost
+    # everything; merge corrects the hours that were re-forecast and inserts the
+    # genuinely new ones. That is what makes the task safe to run on a schedule.
+    hourly_forecast:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.hourly_forecast"
+      mode: merge
+      merge_keys: ["city", "observed_at"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Hourly weather forecast from the Open-Meteo public API."

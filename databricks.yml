@@ -41,6 +41,20 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    ingest_rest_api:
+      name: "[ubunye] 02 · ingest structured — a public REST API"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: hourly_forecast
+          notebook_task:
+            notebook_path: ./examples/02_ingest_rest_api/notebooks/run_hourly_forecast.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/02_ingest_rest_api/pipelines/weather/ingestion/hourly_forecast
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
     ingest_unstructured:
       name: "[ubunye] 03 · ingest unstructured — text + files"
       max_concurrent_runs: 1
