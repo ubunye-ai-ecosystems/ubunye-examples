@@ -1,0 +1,9 @@
+# The examples pin the RELEASED engine from PyPI, not the engine's source tree.
+# That is the point: a green build here means these examples work with a real
+# `pip install`, which is what anyone reading them will actually have.
+ubunye-engine[spark,ml]==0.3.0
+
+pytest>=8
+pandas>=2.2
+pyarrow>=15
+scikit-learn>=1.4

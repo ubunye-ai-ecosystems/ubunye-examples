@@ -1,7 +1,7 @@
 name: pr
 
-# Everything here runs with NO secrets, so a pull request from a fork gets the
-# same signal a maintainer does. Anything needing a workspace lives in deploy.yml.
+# Runs with NO secrets, so a pull request from a fork gets the same signal a
+# maintainer does. Anything that needs a workspace lives in deploy.yml.
 
 on:
   pull_request:
@@ -19,18 +19,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Install the released engine
-        # The examples pin the PUBLISHED package, not the engine's source. That
-        # is the whole point: they exercise what a stranger gets from PyPI, so a
-        # green build here means the examples work with a real install.
-        run: |
-          pip install "ubunye-engine[spark,ml]==0.3.0" pytest pandas pyarrow scikit-learn
+        run: pip install -r requirements.txt
 
       - name: Validate every config
-        # Catches a broken config.yaml in seconds, without a cluster. No env vars
-        # are set on purpose — every value must have a `| default(...)`, or the
-        # example is unrunnable for anyone who has not read our secrets.
+        # Catches a broken config.yaml in seconds, no cluster required.
+        #
+        # No env vars are set, on purpose: every value in these configs must have
+        # a `| default(...)`, or the example is unrunnable by anyone who has not
+        # read our secrets. If this step needs an export to pass, the example is
+        # broken for its audience.
         run: |
           set -e
           ubunye validate -d examples/01_ingest_tables_sql/pipelines   -u retail    -p ingestion --all -dt 2026-07-13
@@ -43,14 +43,30 @@ jobs:
   bundle:
     name: bundle validate
     runs-on: ubuntu-latest
+    # `databricks bundle validate` authenticates against the workspace — it
+    # resolves ${workspace.file_path} and checks the identity it will deploy as.
+    # There is no offline mode, so it cannot run on a fork PR (no secrets), and
+    # pointing it at a fake host just fails DNS. Gate it, and let deploy.yml be
+    # the real gate before anything lands in the workspace.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: databricks/setup-cli@main
 
-      - name: Validate the bundle syntax
-        # No workspace, so this checks the bundle parses and its references
-        # resolve. Deploying is deploy.yml's job.
+      - name: Check for credentials
+        id: creds
+        run: |
+          if [[ -n "${DATABRICKS_HOST}" && -n "${DATABRICKS_CLIENT_ID}" && -n "${DATABRICKS_CLIENT_SECRET}" ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Databricks credentials — skipping bundle validation."
+          fi
+
+      - name: Validate the bundle
+        if: steps.creds.outputs.ok == 'true'
         run: databricks bundle validate --target ci
-        env:
-          DATABRICKS_HOST: https://example.cloud.databricks.com
-          DATABRICKS_TOKEN: dummy
