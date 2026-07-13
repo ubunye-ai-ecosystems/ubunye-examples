@@ -1,0 +1,56 @@
+# Run any example locally, in one command, with no Databricks and no cloud.
+#
+#   docker compose -f platforms/docker/compose.yml run --rm run-anywhere
+#   docker compose -f platforms/docker/compose.yml run --rm rest-api
+#   docker compose -f platforms/docker/compose.yml run --rm jdbc
+#
+# Every service below is the SAME image running a DIFFERENT task directory. Nothing is
+# rebuilt, nothing is reconfigured. The only thing that changes is which four arguments
+# the entrypoint gets — which is the whole claim, expressed as a compose file.
+
+x-common: &common
+  build:
+    context: ../..
+    dockerfile: platforms/docker/Dockerfile
+  image: ubunye-portable:local
+  environment:
+    SPARK_MASTER: "local[*]"
+    UBUNYE_SINK: "s3" # the generic path connector — nothing to do with AWS
+    UBUNYE_DATA_ROOT: "file:///data"
+    DATA_DIR: "/data"
+  volumes:
+    - ubunye-data:/data
+
+services:
+  # 11 · the portability spine. Deterministic output; this is the one the CI matrix
+  # compares against local Spark, Kubernetes and Databricks.
+  run-anywhere:
+    <<: *common
+    command: ["examples/11_run_anywhere", "portable", "ingestion", "document_index"]
+
+  # 02 · REST ingestion from a public API. Needs outbound internet, nothing else.
+  #
+  # This is the example that proves `requests` is missing from the engine's runtime
+  # deps: it works on Databricks only because DBR preinstalls it. The image installs
+  # it explicitly.
+  rest-api:
+    <<: *common
+    command: ["examples/02_ingest_rest_api", "weather", "ingestion", "hourly_forecast"]
+
+  # 09 · JDBC against RNAcentral's public Postgres.
+  #
+  # Read that twice: this is the example that CANNOT run on Databricks serverless,
+  # because serverless ships no JDBC drivers and cannot install a JAR. Here it is one
+  # Maven coordinate. The "restricted" platform is the managed one.
+  jdbc:
+    <<: *common
+    command: ["examples/09_jdbc_ingest", "rnacentral", "ingestion", "ingest_rna"]
+
+  # A shell in the image, for poking about.
+  shell:
+    <<: *common
+    entrypoint: ["/bin/bash"]
+    command: []
+
+volumes:
+  ubunye-data:

@@ -26,7 +26,7 @@ CONFIG:
   inputs:
     reviews:
       format: unity
-      table: samples.bakehouse.media_customer_reviews
+      table: "{{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.media_customer_reviews"
 
     # The corpus is committed to this repo and copied onto a UC volume by
     # notebooks/00_setup.py. Nothing is downloaded — serverless compute cannot

@@ -26,7 +26,7 @@ CONFIG:
     # no egress, nothing to provision.
     franchises:
       format: unity
-      table: samples.bakehouse.sales_franchises
+      table: "{{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_franchises"
 
     # The join runs in the warehouse; Spark receives the result. 20k transactions
     # joined to 30-odd franchises is not work worth moving.
@@ -43,8 +43,8 @@ CONFIG:
                t.paymentMethod,
                c.city    AS customer_city,
                c.country AS customer_country
-        FROM samples.bakehouse.sales_transactions t
-        LEFT JOIN samples.bakehouse.sales_customers c
+        FROM {{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_transactions t
+        LEFT JOIN {{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_customers c
           ON c.customerID = t.customerID
 
   transform: {}

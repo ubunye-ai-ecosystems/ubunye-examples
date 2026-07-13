@@ -27,7 +27,7 @@ CONFIG:
   inputs:
     transactions:
       format: unity
-      table: samples.bakehouse.sales_transactions
+      table: "{{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_transactions"
 
     # Deliberately broken rows, injected so the quarantine path actually executes.
     #

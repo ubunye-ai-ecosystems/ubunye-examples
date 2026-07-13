@@ -1,0 +1,55 @@
+# Run ANY example as a Kubernetes Job.
+#
+#   sed -e "s|{{NAME}}|rest-api|" \
+#       -e "s|{{ARGS}}|\"examples/02_ingest_rest_api\", \"weather\", \"ingestion\", \"hourly_forecast\"|" \
+#       platforms/k8s/job-template.yaml | kubectl apply -f -
+#
+# It is the same image and the same four arguments the Docker entrypoint takes. A pod
+# is just another place to stand.
+#
+# Note what this is NOT: it is not `spark-submit --master k8s://…` with a driver pod
+# spawning executor pods. It is Spark in local[*] mode inside one pod — the honest
+# shape for a task this size, and what most "Spark on Kubernetes" jobs actually are
+# once you look at them.
+#
+# To fan out across executor pods instead, the only change is in the ENVIRONMENT:
+#
+#     SPARK_MASTER: "k8s://https://kubernetes.default.svc"
+#
+# plus a service account with pod-create rights and spark.kubernetes.container.image.
+# config.yaml and transformations.py do not move. That is the claim.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ubunye-{{NAME}}
+spec:
+  backoffLimit: 0 # a retry would hide a flake, and a flake is a finding
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ubunye
+          image: ubunye-portable:ci
+          imagePullPolicy: Never # side-loaded into kind, not pulled
+          args: [{{ARGS}}]
+          env:
+            - name: SPARK_MASTER
+              value: "local[*]"
+            - name: UBUNYE_SINK
+              value: "s3"
+            - name: UBUNYE_DATA_ROOT
+              value: "file:///data"
+            - name: DATA_DIR
+              value: "/data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { memory: "2Gi", cpu: "1" }
+            limits: { memory: "3Gi" }
+      volumes:
+        # A JVM needs somewhere to write, and Delta wants a POSIX filesystem. emptyDir
+        # is enough because the job is self-contained; a real deployment would mount a
+        # PVC or an object store.
+        - name: data
+          emptyDir: {}

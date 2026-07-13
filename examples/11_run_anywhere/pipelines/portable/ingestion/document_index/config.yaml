@@ -37,10 +37,15 @@ ENGINE:
     spark.master: "{{ env.SPARK_MASTER | default('local[*]') }}"
     spark.sql.shuffle.partitions: "2"
 
-    # Delta on open-source Spark needs to be switched on. Databricks ships it
-    # already active, where these two lines are a harmless no-op.
-    spark.sql.extensions: "io.delta.sql.DeltaSparkSessionExtension"
-    spark.sql.catalog.spark_catalog: "org.apache.spark.sql.delta.catalog.DeltaCatalog"
+    # Note what is NOT here: the Delta-on-open-source-Spark extensions.
+    #
+    # They were here, and it was wrong. Databricks ships Delta already active, so
+    # those two lines are pure OSS plumbing — a fact about which Spark distribution
+    # you landed on, which is exactly the sort of thing a pipeline must not know.
+    # CI caught it: this config carried them and worked, and example 02 did not carry
+    # them and died. The fix was not to paste the boilerplate into nine more configs;
+    # it was to move it to the runner, where the platform's business belongs.
+    # See platforms/run_task.sh.
 
   profiles:
     # Both modes must exist. `merged_spark_conf` RAISES when the requested mode has

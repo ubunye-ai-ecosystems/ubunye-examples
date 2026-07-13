@@ -34,7 +34,7 @@ CONFIG:
                fare_amount,
                pickup_zip,
                dropoff_zip
-        FROM samples.nyctaxi.trips
+        FROM {{ env.SOURCE_CATALOG | default('samples') }}.nyctaxi.trips
         WHERE fare_amount BETWEEN 2.5 AND 200
           AND trip_distance BETWEEN 0.1 AND 100
 
