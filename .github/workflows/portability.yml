@@ -71,6 +71,7 @@ jobs:
         # environment variable.
         env:
           SOURCE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
         run: |
           set -euo pipefail
           . platforms/spark_env.sh

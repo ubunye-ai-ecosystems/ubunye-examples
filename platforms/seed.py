@@ -130,8 +130,20 @@ def main() -> int:
     spark = SparkSession.builder.appName("ubunye:seed").enableHiveSupport().getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 
+    # The source schemas the examples read...
     spark.sql("CREATE DATABASE IF NOT EXISTS nyctaxi")
     spark.sql("CREATE DATABASE IF NOT EXISTS bakehouse")
+
+    # ...and the one they WRITE to. On Databricks every notebook opens with
+    # `CREATE SCHEMA IF NOT EXISTS`; off Databricks nobody did, and example 01 read its
+    # source, pushed its join down, computed the right answer and then died on the way
+    # out with SCHEMA_NOT_FOUND.
+    #
+    # Creating the target schema is the platform's job, not the pipeline's — the same
+    # split as staging the corpus. The bootstrap differs per platform. The pipeline
+    # does not.
+    target = os.environ.get("UBUNYE_SCHEMA", "ubunye_examples")
+    spark.sql(f"CREATE DATABASE IF NOT EXISTS {target}")
 
     tables = {
         "nyctaxi.trips": (
