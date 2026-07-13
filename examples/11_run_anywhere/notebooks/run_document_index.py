@@ -120,3 +120,13 @@ assert report[1]["rows"] > 6, "chunking did not run — fewer chunks than docume
 
 print()
 print("OK")
+
+# COMMAND ----------
+
+# Return the fingerprint, don't just print it.
+#
+# A notebook's stdout is not retrievable through the Jobs API — only what it *exits*
+# with is. Printing the hash makes it visible to a human watching the run and
+# invisible to the CI job whose entire purpose is to compare it against the other
+# platforms. So hand it back.
+dbutils.notebook.exit(combined)

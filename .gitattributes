@@ -1,0 +1,27 @@
+# Line endings are a portability bug, and this file is the fix.
+#
+# Found the hard way. The portability matrix asserts that local Spark, Docker,
+# Kubernetes and Databricks all produce the same output hash from the same task. They
+# did not — Databricks came back with a completely different fingerprint.
+#
+# The pipeline was fine. The DATA was not.
+#
+# CI checks the repo out on Linux and gets LF. A Databricks bundle uploads files from
+# whatever is in the developer's working tree — and on Windows, git's autocrlf had
+# rewritten the corpus to CRLF. Same six files, seven extra bytes each, a different
+# sha2() of the text, a different doc_id, a different hash. Nothing errored. The
+# pipeline just quietly ingested different bytes on one platform.
+#
+# Normalise everything to LF, in the repo and in every working tree. Shell scripts and
+# Docker entrypoints need this anyway: a CRLF `run.sh` fails inside a container with
+# the wonderfully unhelpful `bad interpreter: /usr/bin/env bash^M: no such file`.
+* text=auto eol=lf
+
+# The corpus is the input to a content-addressed hash. Its bytes ARE the test.
+*.txt text eol=lf
+
+# Never let git touch these.
+*.png binary
+*.jpg binary
+*.parquet binary
+*.joblib binary
