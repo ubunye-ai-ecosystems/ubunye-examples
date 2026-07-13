@@ -294,7 +294,7 @@ jobs:
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
 
   aws:
-    name: AWS EMR Serverless
+    name: AWS EMR Serverless (skips unless configured)
     runs-on: ubuntu-latest
     # Skips cleanly when the secrets are absent, exactly like deploy.yml. It is not
     # "unsupported" — it is unconfigured, and the difference matters: the day an account
@@ -323,12 +323,27 @@ jobs:
             echo "::notice::No AWS secrets — skipping EMR Serverless. Run platforms/aws/setup.sh to configure."
           fi
 
+      - name: Say plainly whether this ran
+        # A green tick on a job that SKIPPED reads as "the cloud works". It does not
+        # work; it was never asked. Put the truth in the run summary where it cannot be
+        # mistaken for a result — the whole point of this repo is that a green build
+        # means something was actually executed.
+        run: |
+          if [ "${{ steps.creds.outputs.ok }}" = "true" ]; then
+            echo "### AWS EMR Serverless: RAN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### AWS EMR Serverless: **NOT RUN** — no credentials configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This job is green because it was skipped, not because it passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Run \`platforms/aws/setup.sh\` and set the secrets it prints to turn this into a real run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Submit to EMR Serverless
         if: steps.creds.outputs.ok == 'true'
         run: platforms/aws/submit.sh
 
   gcp:
-    name: GCP Dataproc Serverless
+    name: GCP Dataproc Serverless (skips unless configured)
     runs-on: ubuntu-latest
     env:
       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
@@ -355,6 +370,21 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
         if: steps.creds.outputs.ok == 'true'
+
+      - name: Say plainly whether this ran
+        # A green tick on a job that SKIPPED reads as "the cloud works". It does not
+        # work; it was never asked. Put the truth in the run summary where it cannot be
+        # mistaken for a result — the whole point of this repo is that a green build
+        # means something was actually executed.
+        run: |
+          if [ "${{ steps.creds.outputs.ok }}" = "true" ]; then
+            echo "### GCP Dataproc Serverless: RAN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### GCP Dataproc Serverless: **NOT RUN** — no credentials configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This job is green because it was skipped, not because it passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Run \`platforms/gcp/setup.sh\` and set the secrets it prints to turn this into a real run." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Submit to Dataproc Serverless
         if: steps.creds.outputs.ok == 'true'
