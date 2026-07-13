@@ -1,0 +1,72 @@
+name: deploy
+
+# Deploys every example to Databricks as an Asset Bundle, then RUNS them.
+#
+# Running them is the point. A bundle that deploys but produces an empty table is
+# a bundle that looks healthy and is broken — so each notebook ends in assertions,
+# and `bundle run` fails the job when they do.
+#
+# Authenticates with a service principal (OAuth M2M). No personal access tokens:
+# a PAT belongs to a human, expires with them, and carries their permissions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_jobs:
+        description: "Run the jobs after deploying (not just deploy them)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false # never kill a half-finished deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+
+      - name: Check for workspace credentials
+        id: creds
+        # A fork has no secrets. Skip cleanly rather than failing red and teaching
+        # contributors to ignore a red build.
+        run: |
+          if [[ -n "${DATABRICKS_HOST}" && -n "${DATABRICKS_CLIENT_ID}" && -n "${DATABRICKS_CLIENT_SECRET}" ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No Databricks credentials — skipping deploy."
+          fi
+
+      - name: Validate
+        if: steps.creds.outputs.ok == 'true'
+        run: databricks bundle validate --target ci
+
+      - name: Deploy
+        if: steps.creds.outputs.ok == 'true'
+        run: databricks bundle deploy --target ci
+
+      - name: Run — 01 · ingest structured
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        run: databricks bundle run ingest_tables_sql --target ci
+
+      - name: Run — 03 · ingest unstructured
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        run: databricks bundle run ingest_unstructured --target ci
+
+      - name: Run — 04 · ML (engineering, then inference)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        # Two tasks with a dependency: if the model fails its quality gate,
+        # nothing is registered, inference has nothing to load, and this fails.
+        # That is correct — a pipeline that scores with an unvetted model is worse
+        # than one that stops.
+        run: databricks bundle run ml_taxi_fare --target ci

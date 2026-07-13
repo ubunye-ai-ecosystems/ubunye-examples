@@ -1,0 +1,56 @@
+name: pr
+
+# Everything here runs with NO secrets, so a pull request from a fork gets the
+# same signal a maintainer does. Anything needing a workspace lives in deploy.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    name: validate + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install the released engine
+        # The examples pin the PUBLISHED package, not the engine's source. That
+        # is the whole point: they exercise what a stranger gets from PyPI, so a
+        # green build here means the examples work with a real install.
+        run: |
+          pip install "ubunye-engine[spark,ml]==0.3.0" pytest pandas pyarrow scikit-learn
+
+      - name: Validate every config
+        # Catches a broken config.yaml in seconds, without a cluster. No env vars
+        # are set on purpose — every value must have a `| default(...)`, or the
+        # example is unrunnable for anyone who has not read our secrets.
+        run: |
+          set -e
+          ubunye validate -d examples/01_ingest_tables_sql/pipelines   -u retail    -p ingestion --all -dt 2026-07-13
+          ubunye validate -d examples/03_ingest_unstructured/pipelines -u docs      -p ingestion --all -dt 2026-07-13
+          ubunye validate -d examples/04_ml_taxi_fare/pipelines        -u taxi_fare -p ml        --all -dt 2026-07-13
+
+      - name: Unit tests
+        run: pytest examples/*/tests -v
+
+  bundle:
+    name: bundle validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+
+      - name: Validate the bundle syntax
+        # No workspace, so this checks the bundle parses and its references
+        # resolve. Deploying is deploy.yml's job.
+        run: databricks bundle validate --target ci
+        env:
+          DATABRICKS_HOST: https://example.cloud.databricks.com
+          DATABRICKS_TOKEN: dummy
