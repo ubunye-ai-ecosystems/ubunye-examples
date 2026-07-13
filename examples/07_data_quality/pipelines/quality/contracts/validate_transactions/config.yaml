@@ -1,0 +1,89 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Data quality: a contract, enforced.
+#
+# "Safe to re-run" is hollow if the pipeline will happily ingest anything. This
+# task declares what a valid transaction IS, splits the data into rows that meet
+# the contract and rows that do not, writes BOTH, and fails the run when the
+# breach rate crosses a line.
+#
+# Bad rows are quarantined, not dropped. A dropped row is a silent data loss: the
+# counts move, nobody knows why, and the row is gone. A quarantined row is a bug
+# report with the evidence attached.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    transactions:
+      format: unity
+      table: samples.bakehouse.sales_transactions
+
+    # Deliberately broken rows, injected so the quarantine path actually executes.
+    #
+    # The sample data is clean. An example whose failure path never runs proves
+    # nothing — it would pass, look healthy, and keep passing even if the quarantine
+    # were broken. So we hand it rows we KNOW violate the contract and assert they
+    # are caught. Each breaks exactly one rule.
+    #
+    # Every fault here is QUARANTINE severity on purpose. A FATAL breach (a null
+    # primary key, an unattributable sale) stops the run by design — injecting one
+    # would mean this job could never pass, so the fatal rules are proven in the
+    # unit tests instead, where a deliberate failure is the assertion.
+    faults:
+      format: unity
+      sql: |
+        SELECT * FROM VALUES
+          (900001, 1001, 3000001, timestamp'2024-05-01 10:00:00', 'Golden Gate Ginger', 0,  3.0,  0.0, 'visa',   '4111'),
+          (900002, 1002, 3000001, timestamp'2024-05-01 11:00:00', 'Outback Oatmeal',    2,  3.0, 99.0, 'visa',   '4111'),
+          (900003, 1003, 3000001, NULL,                           'Austin Almond',      1,  3.0,  3.0, 'visa',   '4111'),
+          (900004, 1004, 3000001, timestamp'2024-05-01 13:00:00', 'Tokyo Tidbits',      1, -2.0, -2.0, 'visa',   '4111'),
+          (900005, 1005, 3000001, timestamp'2024-05-01 14:00:00', 'Pearly Pies',        1,  3.0,  3.0, 'crypto', '4111')
+        AS t(transactionID, customerID, franchiseID, dateTime, product, quantity, unitPrice, totalPrice, paymentMethod, cardNumber)
+
+  transform: {}
+
+  outputs:
+    # Only rows that meet the contract. `merge` on the id, so re-running corrects
+    # rather than duplicates.
+    clean_transactions:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.clean_transactions"
+      mode: merge
+      merge_keys: ["transactionID"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Transactions that satisfy the data contract."
+
+    # The rows that did not, WITH the reason. This table is the bug report.
+    quarantined_transactions:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.quarantined_transactions"
+      mode: overwrite
+      file_format: delta
+      options:
+        overwriteSchema: "true"
+        comment: "Rows that failed the contract, with the rule each one broke."
+
+    # One row per rule per run: how many rows it checked, how many it failed.
+    # This is what you graph, and what tells you a source system changed before
+    # anybody files a ticket.
+    contract_results:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.contract_results"
+      mode: append
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Per-rule pass/fail counts, one row per rule per run."

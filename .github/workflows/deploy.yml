@@ -82,3 +82,7 @@ jobs:
         if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
         # The slowest job by far: fine-tuning on CPU takes about ten minutes.
         run: databricks bundle run finetune_llm --target ci
+
+      - name: Run — 07 · data quality (contract, quarantine, fail loudly)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        run: databricks bundle run data_quality --target ci

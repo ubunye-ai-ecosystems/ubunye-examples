@@ -172,6 +172,20 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    data_quality:
+      name: "[ubunye] 07 · Data quality — a contract, enforced"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: validate_transactions
+          notebook_task:
+            notebook_path: ./examples/07_data_quality/notebooks/run_validate_transactions.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/07_data_quality/pipelines/quality/contracts/validate_transactions
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job
   # names and pauses schedules, so you cannot accidentally trample a real one.
