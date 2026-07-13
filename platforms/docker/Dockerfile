@@ -3,16 +3,18 @@
 # Nothing about the pipeline is Docker-aware. The image supplies a JVM, a Spark, a
 # Delta, and the engine from PyPI; the task directory is copied in unchanged. That is
 # the point: a container is just another place to stand.
-FROM python:3.11-slim
+# Pinned to bookworm on purpose. `python:3.11-slim` now tracks Debian trixie, which
+# dropped openjdk-17 for openjdk-21 — so the unpinned base breaks the build with a
+# bare `exit code: 100` from apt, which tells you nothing. Spark 3.5 wants Java 17.
+FROM python:3.11-slim-bookworm
 
 # Spark needs a JVM. Nothing else here does.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps \
  && rm -rf /var/lib/apt/lists/*
 
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
-# The path differs by arch (arm64 vs amd64) and a wrong JAVA_HOME fails late and
-# obscurely, so resolve it rather than hard-code it.
+# Resolve JAVA_HOME rather than hard-code it — the path differs between arm64 and
+# amd64, and a wrong one fails late and obscurely.
 RUN JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" \
  && echo "JAVA_HOME=${JAVA_HOME}" > /etc/java.env
 

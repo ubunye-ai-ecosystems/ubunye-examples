@@ -253,6 +253,20 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    run_anywhere:
+      name: "[ubunye] 11 · Run anywhere — the same task, on Databricks"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: document_index
+          notebook_task:
+            notebook_path: ./examples/11_run_anywhere/notebooks/run_document_index.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/11_run_anywhere/pipelines/portable/ingestion/document_index
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job
   # names and pauses schedules, so you cannot accidentally trample a real one.

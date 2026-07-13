@@ -49,7 +49,21 @@ def fingerprint(spark, target: str) -> dict:
 def main() -> int:
     from pyspark.sql import SparkSession
 
-    spark = SparkSession.builder.getOrCreate()
+    # The verifier needs Delta switched on too — it is reading Delta tables.
+    #
+    # The first version of this script did a bare `.getOrCreate()` and died with
+    # DELTA_CONFIGURE_SPARK_SESSION_WITH_EXTENSION_AND_CATALOG *after the pipeline
+    # had already run perfectly*. The task was portable; the thing checking it was
+    # not. On Databricks these two lines are a no-op — Delta is already on.
+    spark = (
+        SparkSession.builder.appName("ubunye:fingerprint")
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+        .config(
+            "spark.sql.catalog.spark_catalog",
+            "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+        )
+        .getOrCreate()
+    )
     spark.sparkContext.setLogLevel("ERROR")
 
     report = [fingerprint(spark, t) for t in sys.argv[1:]]
