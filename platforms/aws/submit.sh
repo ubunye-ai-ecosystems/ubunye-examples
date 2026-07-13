@@ -10,6 +10,27 @@
 # Run platforms/aws/setup.sh once to create them.
 set -euo pipefail
 
+# --- running the MODEL examples (05 RAG, 06 distillation) on EMR ----------------
+#
+# They need torch, transformers and the weights. EMR Serverless takes a CUSTOM
+# CONTAINER IMAGE, and platforms/docker/Dockerfile.ml is exactly that image -- the same
+# one Docker and Kubernetes run. Push it to ECR and point the application at it:
+#
+#   aws ecr create-repository --repository-name ubunye-ml --region "$REGION"
+#   docker build -f platforms/docker/Dockerfile   -t ubunye-portable:ci .
+#   docker build -f platforms/docker/Dockerfile.ml --build-arg BASE=ubunye-portable:ci #          -t "$ECR/ubunye-ml:latest" .
+#   aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ECR"
+#   docker push "$ECR/ubunye-ml:latest"
+#
+#   aws emr-serverless update-application #     --application-id "$AWS_EMR_APPLICATION_ID" --region "$REGION" #     --image-configuration imageUri="$ECR/ubunye-ml:latest"
+#
+# then submit with MODEL_BACKEND=local:
+#   --conf spark.emr-serverless.driverEnv.MODEL_BACKEND=local
+#
+# The weights are already inside the image, so the job does not touch the internet --
+# which matters, because an EMR job in a private subnet cannot reach huggingface.co.
+
+
 : "${AWS_S3_BUCKET:?}" "${AWS_EMR_APPLICATION_ID:?}" "${AWS_EMR_JOB_ROLE_ARN:?}"
 REGION="${AWS_REGION:-eu-west-1}"
 EXAMPLE="${1:-examples/11_run_anywhere}"
