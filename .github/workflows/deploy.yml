@@ -102,3 +102,11 @@ jobs:
         # TensorFlow needs numpy<2, which sklearn and MLflow cannot live with, so
         # they cannot share one environment. The task is the unit of isolation.
         run: databricks bundle run ml_frameworks --target ci
+
+      - name: Run — 11 · run anywhere (the same task, on Databricks)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        # The bundle has always had this job; deploy.yml never ran it, so its Databricks
+        # run was proven by hand and not enforced. The portability matrix asserts that
+        # local, Docker, Kubernetes and s3a:// agree with each other; this is the run
+        # that makes Databricks agree with them too.
+        run: databricks bundle run run_anywhere --target ci

@@ -114,6 +114,19 @@ jobs:
           UBUNYE_CORPUS: file:///tmp/ubunye/corpus
         run: platforms/run_task.sh examples/03_ingest_unstructured docs ingestion document_index
 
+      - name: 08 · model monitoring — drift, decay, rollback, off Databricks
+        # Reads 04's model and feature table. The registry is pathlib-based, so a plain
+        # directory is all it needs — which is exactly why it CANNOT yet run on EMR or
+        # Dataproc, where there is no filesystem to point it at. That is engine bug #6.
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          TAXI_MODEL_STORE: /tmp/ubunye/model_store
+          TAXI_MODELS_DIR: ${{ github.workspace }}/examples/04_ml_taxi_fare/models
+        run: platforms/run_task.sh examples/08_model_monitoring taxi_fare mlops monitor_model
+
       - name: Install the open-source model stack
         # The two examples that "could not leave Databricks" only could not because
         # they call Databricks-hosted serving endpoints. A hosted model has an
@@ -485,6 +498,54 @@ jobs:
           kubectl apply -f platforms/k8s/job-models.yaml
           kubectl wait --for=condition=complete --timeout=25m job/ubunye-rag             || { echo "--- pod logs ---"; kubectl logs job/ubunye-rag --tail=80; exit 1; }
           kubectl logs job/ubunye-rag | tail -25
+
+  ml-frameworks:
+    name: sklearn vs PyTorch vs TensorFlow, off Databricks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Install the three frameworks
+        # TensorFlow needs numpy<2, which scipy and MLflow cannot live with unpinned.
+        # This is a separate JOB for the same reason example 10 uses separate TASKS: the
+        # three frameworks cannot share one interpreter, and the task is the unit of
+        # isolation. Pinning them together is the only thing that makes them coexist.
+        run: |
+          pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark,ml]==0.3.0"                       "torch>=2.2" --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install "tensorflow" "numpy<2" "protobuf<5"
+
+      - name: Seed, engineer features, then race the three frameworks
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          BENCH_MODEL_STORE: /tmp/ubunye/model_store
+          TORCH_THREADS: "2"
+        run: |
+          set -euo pipefail
+          . platforms/spark_env.sh
+          python platforms/seed.py
+          platforms/run_task.sh examples/04_ml_taxi_fare taxi_fare ml feature_engineering
+          platforms/run_task.sh examples/10_ml_frameworks fare_bench ml             train_sklearn train_torch train_keras select_champion
+
+      - name: The leaderboard
+        run: |
+          . platforms/spark_env.sh
+          python - <<'PY'
+          from pyspark.sql import SparkSession
+          spark = SparkSession.builder.appName("board").enableHiveSupport().getOrCreate()
+          spark.sparkContext.setLogLevel("ERROR")
+          b = spark.table("ubunye_examples.fare_bench_leaderboard")
+          b.select("rank","framework","score_rmse","test_rmse","train_seconds","verdict")            .orderBy("rank").show(truncate=False)
+          rows = b.collect()
+          got = sorted(r["framework"] for r in rows)
+          assert got == ["pytorch","scikit-learn","tensorflow"], got
+          PY
 
   identical:
     name: every platform produced the same output
