@@ -73,7 +73,7 @@ jobs:
           SOURCE_CATALOG: spark_catalog
         run: |
           set -euo pipefail
-          export PYSPARK_SUBMIT_ARGS="--packages io.delta:delta-spark_2.12:3.2.0             --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension             --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog             --conf spark.sql.catalogImplementation=hive             --conf spark.sql.warehouse.dir=/tmp/ubunye/warehouse             --conf javax.jdo.option.ConnectionURL=jdbc:derby:;databaseName=/tmp/ubunye/metastore_db;create=true             pyspark-shell"
+          . platforms/spark_env.sh
           python platforms/seed.py
 
       - name: 01 · tables + SQL pushdown — off Databricks
@@ -107,6 +107,7 @@ jobs:
 
       - name: What actually landed on disk
         run: |
+          . platforms/spark_env.sh
           python - <<'PY'
           from pyspark.sql import SparkSession
           spark = (SparkSession.builder.appName("check")
