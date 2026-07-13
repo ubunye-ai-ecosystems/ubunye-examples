@@ -39,7 +39,32 @@ esac
 # driver to open-source Spark is one Maven coordinate. It is Databricks SERVERLESS that
 # cannot do it — which is why example 09 runs here and not there.
 PACKAGES="${DELTA_PKG},org.postgresql:postgresql:42.7.4"
-export PYSPARK_SUBMIT_ARGS="--packages ${PACKAGES} pyspark-shell"
+
+# --- Spark conf the PLATFORM owns, not the pipeline ----------------------------
+# Delta has to be switched on for open-source Spark. Databricks ships it already
+# active, so this is pure OSS-plumbing — and that means it does NOT belong in
+# config.yaml.
+#
+# I put it in a config first and it was wrong, and CI said so: example 11 carried
+# these two lines and worked, example 02 did not carry them and died with
+# DELTA_CONFIGURE_SPARK_SESSION_WITH_EXTENSION_AND_CATALOG. The fix is not "add the
+# boilerplate to the other nine configs". It is to notice that a pipeline should not
+# have to know which Spark distribution it landed on. The platform sets this; the
+# config stays clean; and no config anywhere mentions Delta-on-OSS again.
+#
+# `--conf` here lands in the JVM's default SparkConf, which the engine's
+# SparkSession.builder inherits — so it reaches the session the engine builds itself.
+CONF=(
+  --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension"
+  --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog"
+  # A real metastore, so `format: unity` — which is only ever spark.table() and
+  # saveAsTable() — behaves off Databricks exactly as it does on it, and tables
+  # survive between separate `ubunye run` invocations.
+  --conf "spark.sql.catalogImplementation=hive"
+  --conf "spark.sql.warehouse.dir=${DATA}/warehouse"
+  --conf "javax.jdo.option.ConnectionURL=jdbc:derby:;databaseName=${DATA}/metastore_db;create=true"
+)
+export PYSPARK_SUBMIT_ARGS="--packages ${PACKAGES} ${CONF[*]} pyspark-shell"
 
 mkdir -p "${DATA}"
 echo "example   : ${EXAMPLE}"

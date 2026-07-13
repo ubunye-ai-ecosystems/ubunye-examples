@@ -32,7 +32,14 @@ jobs:
 
       - name: Install the released engine + Spark + Delta
         # Pinned as a matched pair — see the note in platforms/docker/Dockerfile.
-        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine==0.3.0"
+        #
+        # `requests` is installed EXPLICITLY, and that is a bug in the engine, not a
+        # quirk of this workflow: it lives in the `dev` extra, so
+        # `pip install ubunye-engine[spark]` ships a rest_api reader that cannot make
+        # a request. It works on Databricks purely because DBR preinstalls it. This
+        # step failed with `No module named 'requests'` the first time example 02 ran
+        # off Databricks — which is the only place the bug is visible.
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine==0.3.0" "requests>=2.28"
 
       - name: Run the task
         id: run
