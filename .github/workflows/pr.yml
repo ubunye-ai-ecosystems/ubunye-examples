@@ -44,6 +44,21 @@ jobs:
           ubunye validate -d examples/09_jdbc_ingest/pipelines         -u rnacentral -p ingestion --all -dt 2026-07-13
           ubunye validate -d examples/10_ml_frameworks/pipelines      -u fare_bench -p ml        --all -dt 2026-07-13
 
+      - name: The three framework configs must stay identical
+        # Example 10's entire argument is that the engine does not know which
+        # framework is behind transformations.py — and the evidence is that the three
+        # trainers' config.yaml files are byte-for-byte the same file.
+        #
+        # That claim is in the README, so it has to be true. One well-meaning edit
+        # adding "# the TensorFlow one" to a comment turns the headline of the example
+        # into a lie, and nothing else would ever catch it.
+        run: |
+          set -e
+          cd examples/10_ml_frameworks/pipelines/fare_bench/ml
+          diff train_sklearn/config.yaml train_torch/config.yaml
+          diff train_sklearn/config.yaml train_keras/config.yaml
+          echo "the three framework configs are identical"
+
       - name: Every task file must parse
         # A mangled f-string does not fail `ubunye validate` — it fails on the
         # cluster, ten minutes into a job. Catch it here, in one second.

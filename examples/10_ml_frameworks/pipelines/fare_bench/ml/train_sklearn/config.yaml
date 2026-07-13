@@ -1,12 +1,15 @@
 MODEL: "ml"
 VERSION: "1.0.0"
 
-# Train the scikit-learn model on the taxi features.
+# Train a model on the taxi features, and register it if it earns its place.
 #
-# This config is BYTE-FOR-BYTE identical to the other two trainers'. That is the
-# whole argument of this example: the engine does not know or care which framework
-# is behind transformations.py. The inputs, the splits, the gate, the registry and
-# the output table are the same. Only model.py changes.
+# This config is BYTE-FOR-BYTE IDENTICAL across train_sklearn, train_torch and
+# train_keras — deliberately, and CI runs `diff` to keep it that way. It does not
+# name a framework anywhere, because it does not know about one.
+#
+# That is the whole argument of this example: the engine sees inputs, a transform and
+# outputs. Whether a gradient-boosted tree or a neural network is behind
+# transformations.py is a fact about model.py, and nothing else needs to know it.
 #
 # Reads the feature table written by example 04 — run `ml_taxi_fare` first.
 
