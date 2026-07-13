@@ -200,6 +200,59 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    ml_frameworks:
+      name: "[ubunye] 10 · Frameworks — sklearn vs PyTorch vs TensorFlow"
+      max_concurrent_runs: 1
+      tasks:
+        # The three trainers have no depends_on between them, so they run in
+        # PARALLEL. They append to one Delta table; concurrent appends do not
+        # conflict under optimistic concurrency. Three overwrites would.
+        - task_key: train_sklearn
+          notebook_task:
+            notebook_path: ./examples/10_ml_frameworks/notebooks/run_train_sklearn.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/10_ml_frameworks/pipelines/fare_bench/ml/train_sklearn
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        - task_key: train_torch
+          notebook_task:
+            notebook_path: ./examples/10_ml_frameworks/notebooks/run_train_torch.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/10_ml_frameworks/pipelines/fare_bench/ml/train_torch
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        - task_key: train_keras
+          notebook_task:
+            notebook_path: ./examples/10_ml_frameworks/notebooks/run_train_keras.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/10_ml_frameworks/pipelines/fare_bench/ml/train_keras
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        # Waits for all three. A leaderboard built while a trainer is still running
+        # would rank whoever happened to finish first.
+        - task_key: select_champion
+          depends_on:
+            - task_key: train_sklearn
+            - task_key: train_torch
+            - task_key: train_keras
+          notebook_task:
+            notebook_path: ./examples/10_ml_frameworks/notebooks/run_select_champion.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/10_ml_frameworks/pipelines/fare_bench/ml/select_champion
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job
   # names and pauses schedules, so you cannot accidentally trample a real one.

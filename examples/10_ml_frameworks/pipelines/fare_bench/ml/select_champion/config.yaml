@@ -1,0 +1,58 @@
+MODEL: "ml"
+VERSION: "1.0.0"
+
+# Rank the three frameworks and name a champion.
+#
+# Note what this task does NOT do: load the models. It reads the metrics the three
+# trainers wrote, and nothing else.
+#
+# That is not laziness, it is the only thing that works. TensorFlow needs numpy<2
+# and protobuf<5 on this runtime; a champion task that loaded all three models would
+# have to import torch AND tensorflow AND sklearn into one interpreter and hope
+# their dependency trees agreed. They do not. Comparing recorded numbers needs
+# neither framework installed — so this task installs neither.
+#
+# Each trainer scored the SAME `score` split — rows no model fitted on and no gate
+# looked at — so the numbers are comparable without re-running anything.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    # Only the latest run of each framework. The metrics table is APPENDed to
+    # forever, so without this the leaderboard would rank every version ever trained
+    # against every other — and yesterday's model would keep winning.
+    metrics:
+      format: unity
+      sql: |
+        WITH latest AS (
+          SELECT framework, max(recorded_at) AS recorded_at
+          FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_metrics
+          GROUP BY framework
+        )
+        SELECT m.*
+        FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_metrics m
+        JOIN latest USING (framework, recorded_at)
+
+  transform: {}
+
+  outputs:
+    fare_bench_leaderboard:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_leaderboard"
+      # Overwrite, not append: this is a "who is winning right now" table, and there
+      # is exactly one right answer at a time. The history lives in fare_bench_metrics.
+      mode: overwrite
+      file_format: delta
+      options:
+        overwriteSchema: "true"
+        comment: "Framework bake-off: ranked on the score split, which no model was gated on."

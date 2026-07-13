@@ -94,3 +94,11 @@ jobs:
         # the registry with a healthy production version — 04's inference task on
         # the next run still has something to load. The notebook asserts that.
         run: databricks bundle run model_monitoring --target ci
+
+      - name: Run — 10 · frameworks (sklearn vs PyTorch vs TensorFlow)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        # Must come after 04: all three trainers read its feature table. The three
+        # trainers run in parallel and each installs a DIFFERENT framework —
+        # TensorFlow needs numpy<2, which sklearn and MLflow cannot live with, so
+        # they cannot share one environment. The task is the unit of isolation.
+        run: databricks bundle run ml_frameworks --target ci

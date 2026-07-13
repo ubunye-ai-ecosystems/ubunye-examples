@@ -54,6 +54,7 @@ task. They differ in what `transformations.py` says, not in shape.
 | **06** | [Fine-tuning an open LLM](examples/06_finetune_llm) | `samples.bakehouse` reviews | An LLM labels the data, a small DistilBERT **learns from it** and is gated on `recall_negative` — distillation, end to end |
 | **07** | [Data quality — a contract, enforced](examples/07_data_quality) | `samples.bakehouse` | Rules with severities; bad rows **quarantined, not dropped**; the run fails when the breach is structural |
 | **08** | [Model monitoring & rollback](examples/08_model_monitoring) | the model and features from 04 | Drift, decay, and champion-vs-challengers — and **why a rollback is the right answer to only one of them** |
+| **10** | [sklearn vs PyTorch vs TensorFlow](examples/10_ml_frameworks) | the features from 04 | The same model in three frameworks, behind **three byte-for-byte identical configs**. A leaderboard that admits when the winner doesn't mean anything |
 
 **Needs a paid workspace**
 
@@ -84,6 +85,18 @@ something nobody vetted.
 
 Shipping a better model is a **promotion in the registry**, not a code change to the
 inference task.
+
+### The engine does not know what a framework is
+
+Example **10** trains the same model in **scikit-learn, PyTorch and TensorFlow**, and
+the three `config.yaml` files are **byte-for-byte identical**. Each `transformations.py`
+is four lines: name a model class, hand it to the same training run. Tree or neural net
+is a distinction inside `model.py`, not one the engine makes.
+
+It ends in a leaderboard that is honest about itself: the frameworks land within 0.5%
+of each other, **the winner flips depending on which held-out split you rank on**, and
+the task says `too close to call` rather than crowning a 0.5% lead. Sorting three
+numbers always produces a first place; that is arithmetic, not evidence.
 
 ### And a gate is not monitoring
 
