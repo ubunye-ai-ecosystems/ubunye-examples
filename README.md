@@ -56,6 +56,24 @@ task. They differ in what `transformations.py` says, not in shape.
 | **08** | [Model monitoring & rollback](examples/08_model_monitoring) | the model and features from 04 | Drift, decay, and champion-vs-challengers — and **why a rollback is the right answer to only one of them** |
 | **10** | [sklearn vs PyTorch vs TensorFlow](examples/10_ml_frameworks) | the features from 04 | The same model in three frameworks, behind **three byte-for-byte identical configs**. A leaderboard that admits when the winner doesn't mean anything |
 
+**Define once, run anywhere**
+
+| | Example | Runs on | Shows |
+|---|---|---|---|
+| **11** | [Run anywhere](examples/11_run_anywhere) | local · Docker · Kubernetes · Databricks | One task directory, four platforms, and a CI job that asserts **all four produced the same output hash** |
+
+Example 11 is the claim on the tin, tested. The same `config.yaml` and
+`transformations.py` run unchanged on open-source Spark, in a container, on a
+Kubernetes cluster and on Databricks — and
+[`portability.yml`](.github/workflows/portability.yml) fails the build if their outputs
+disagree. The entire portability surface is **three environment variables**:
+`SPARK_MASTER`, `UBUNYE_SINK`, `UBUNYE_DATA_ROOT`.
+
+It earned its keep on its first run: three platforms agreed and Databricks did not,
+because git's `autocrlf` had rewritten the corpus to CRLF in the Windows working tree
+the bundle uploads from. The pipeline was portable; the *data* wasn't. "It didn't crash
+on four platforms" would have passed.
+
 **Needs a paid workspace**
 
 | | Example | Reads | Shows |
