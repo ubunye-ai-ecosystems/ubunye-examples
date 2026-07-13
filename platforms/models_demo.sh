@@ -12,6 +12,22 @@ set -euo pipefail
 ROOT="${APP_ROOT:-/app}"
 DATA="${DATA_DIR:-/data}"
 
+# This script IS the off-Databricks bootstrap, so it carries its own defaults rather
+# than trusting every caller to remember six variables. The first version did not, I
+# dropped the -e flags when I switched the docker run to call it, and example 03 fell
+# straight back to its Databricks default and went looking for
+#   /Volumes/workspace/ubunye_examples/corpus
+# inside a container. Anything the caller sets still wins.
+export SOURCE_CATALOG="${SOURCE_CATALOG:-spark_catalog}"
+export UBUNYE_CATALOG="${UBUNYE_CATALOG:-spark_catalog}"
+export UBUNYE_SCHEMA="${UBUNYE_SCHEMA:-ubunye_examples}"
+export UBUNYE_SINK="${UBUNYE_SINK:-unity}"
+export UBUNYE_CORPUS="${UBUNYE_CORPUS:-file://${DATA}/corpus}"
+export MODEL_BACKEND="${MODEL_BACKEND:-local}"   # the whole point: no endpoint
+export TORCH_THREADS="${TORCH_THREADS:-2}"
+export STUDENT_MODEL_STORE="${STUDENT_MODEL_STORE:-${DATA}/model_store}"
+export DATA_DIR="${DATA}"
+
 [ -f /etc/java.env ] && . /etc/java.env
 
 mkdir -p "${DATA}/corpus"
