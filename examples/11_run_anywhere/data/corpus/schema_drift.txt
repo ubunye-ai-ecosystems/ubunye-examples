@@ -1,0 +1,7 @@
+Schema Drift Is a Contract Breach
+
+An upstream team adds a column. Nothing breaks. Weeks later they rename one, and your join silently produces nulls, and a dashboard that has been wrong for a fortnight is finally noticed by someone in finance.
+
+Schema drift is not a technical failure; it is a contract breach that the technology failed to notice. The remedy is to make the contract explicit and to fail loudly when it is violated. Declare the columns you depend on. Assert their types. Let the job die on a Tuesday morning rather than quietly emit nulls until the quarter closes.
+
+The instinct to be permissive — to accept whatever arrives and cope — feels robust and is the opposite. A pipeline that never fails is not a pipeline that is always right. It is a pipeline that has stopped telling you when it is wrong.

@@ -1,0 +1,7 @@
+The Cost of One More Join
+
+Every join is a promise that two things refer to the same entity. Most data quality incidents are that promise being broken quietly.
+
+A left join that should have matched, and did not, produces nulls rather than an error. A join on a key that is not unique produces more rows than it started with — a fan-out that inflates every sum downstream and is invisible unless someone counts. Neither raises an alarm. Both are found weeks later by a person who noticed a number looked wrong.
+
+Two habits cost almost nothing and catch almost all of it. Count the rows before and after: a join should not change the row count unless you meant it to. And assert the join key is unique on the side you expect it to be. If it is not, you have not written a join; you have written a multiplication.
