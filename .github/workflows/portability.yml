@@ -293,6 +293,73 @@ jobs:
 
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
 
+  aws:
+    name: AWS EMR Serverless
+    runs-on: ubuntu-latest
+    # Skips cleanly when the secrets are absent, exactly like deploy.yml. It is not
+    # "unsupported" — it is unconfigured, and the difference matters: the day an account
+    # exists, four secrets turn this green with no code change.
+    #
+    # I never see the keys. platforms/aws/setup.sh (run by the repo owner) creates a
+    # bucket, a scoped IAM job role and an EMR Serverless application, and prints the
+    # `gh secret set` lines. CI holds them; CI runs the job; I read the log.
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_EMR_APPLICATION_ID: ${{ secrets.AWS_EMR_APPLICATION_ID }}
+      AWS_EMR_JOB_ROLE_ARN: ${{ secrets.AWS_EMR_JOB_ROLE_ARN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Are we configured for AWS?
+        id: creds
+        run: |
+          if [[ -n "${AWS_S3_BUCKET}" && -n "${AWS_EMR_APPLICATION_ID}" && -n "${AWS_EMR_JOB_ROLE_ARN}" ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No AWS secrets — skipping EMR Serverless. Run platforms/aws/setup.sh to configure."
+          fi
+
+      - name: Submit to EMR Serverless
+        if: steps.creds.outputs.ok == 'true'
+        run: platforms/aws/submit.sh
+
+  gcp:
+    name: GCP Dataproc Serverless
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      GCP_BUCKET: ${{ secrets.GCP_BUCKET }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Are we configured for GCP?
+        id: creds
+        run: |
+          if [[ -n "${GCP_PROJECT}" && -n "${GCP_BUCKET}" ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No GCP secrets — skipping Dataproc. Run platforms/gcp/setup.sh to configure."
+          fi
+
+      - uses: google-github-actions/auth@v2
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.creds.outputs.ok == 'true'
+
+      - name: Submit to Dataproc Serverless
+        if: steps.creds.outputs.ok == 'true'
+        run: platforms/gcp/submit.sh
+
   identical:
     name: every platform produced the same output
     runs-on: ubuntu-latest
