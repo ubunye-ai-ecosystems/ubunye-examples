@@ -105,6 +105,55 @@ jobs:
         run: |
           platforms/run_task.sh examples/04_ml_taxi_fare taxi_fare ml             feature_engineering model_training batch_inference
 
+      - name: 03 · unstructured — off Databricks
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          UBUNYE_CORPUS: file:///tmp/ubunye/corpus
+        run: platforms/run_task.sh examples/03_ingest_unstructured docs ingestion document_index
+
+      - name: Install the open-source model stack
+        # The two examples that "could not leave Databricks" only could not because
+        # they call Databricks-hosted serving endpoints. A hosted model has an
+        # open-source substitute that runs on a CPU with no API key and no account.
+        run: pip install "sentence-transformers>=3" "transformers>=4.44" "torch>=2.2" --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: 05 · RAG — with open-source models, no endpoint
+        # MODEL_BACKEND=local swaps databricks-bge-large-en for MiniLM and
+        # llama-3.1-8b for Qwen2.5-0.5B. The config.yaml does not move. The pipeline
+        # does not move. Which model answers is business logic, and it lives in
+        # serving.py where business logic belongs.
+        #
+        # The answers WILL be worse than an 8B model's, and that is not the claim.
+        # The claim is that the process — chunk, embed, retrieve by cosine, ground the
+        # answer, cite the sources — runs with no Databricks at all.
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          MODEL_BACKEND: local
+          TORCH_THREADS: "2"
+        run: |
+          platforms/run_task.sh examples/05_rag_documents rag knowledge embed_chunks answer_questions
+
+      - name: 06 · distillation — an open teacher, an open student
+        # The teacher was an 8B Databricks endpoint; now it is Qwen2.5-0.5B on the CPU.
+        # The student was, and remains, DistilBERT. Distillation is teacher -> student;
+        # neither has to be hosted by anyone.
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          MODEL_BACKEND: local
+          TORCH_THREADS: "2"
+          STUDENT_MODEL_STORE: /tmp/ubunye/model_store
+        run: |
+          platforms/run_task.sh examples/06_finetune_llm reviews nlp label_reviews finetune_classifier
+
       - name: What actually landed on disk
         run: |
           . platforms/spark_env.sh
@@ -130,7 +179,10 @@ jobs:
           print()
           expected = ["franchise_revenue", "product_revenue",          # 01
                       "clean_transactions", "quarantined_transactions", "contract_results",  # 07
-                      "taxi_features", "taxi_model_metrics", "taxi_fare_predictions"]        # 04
+                      "taxi_features", "taxi_model_metrics", "taxi_fare_predictions",        # 04
+                      "documents", "document_chunks",                                        # 03
+                      "chunk_embeddings", "rag_answers",                                     # 05
+                      "labelled_reviews", "student_model_metrics"]                           # 06
           for t in expected:
               n = spark.table(f"ubunye_examples.{t}").count()
               print(f"  table  {t:<28} {n:>7} rows")

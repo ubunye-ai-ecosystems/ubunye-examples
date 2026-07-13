@@ -106,6 +106,37 @@ def invoke(endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     raise RuntimeError(f"{endpoint}: still rate-limited after {MAX_RETRIES} retries")
 
 
+# --- provider selection ---------------------------------------------------------
+#
+# MODEL_BACKEND=databricks (default) -> the serving endpoints above.
+# MODEL_BACKEND=local                -> open-source models on the CPU, no endpoint,
+#                                       no API key, no account. See
+#                                       examples/_shared/local_models.py.
+#
+# This is the ONLY thing that changes between a Databricks run and a run on a laptop,
+# in a container, or on a Kubernetes pod. The config.yaml does not move; the pipeline
+# does not move. Which model answers is business logic, and business logic lives here.
+#
+# The endpoint argument is kept in the signature and ignored by the local backend, so
+# nothing above this file has to know which provider it got.
+
+
+def _local():
+    import sys
+    from pathlib import Path
+
+    shared = Path(__file__).resolve().parents[5] / "_shared"
+    if str(shared) not in sys.path:
+        sys.path.insert(0, str(shared))
+    import local_models
+
+    return local_models
+
+
+def _use_local() -> bool:
+    return os.environ.get("MODEL_BACKEND", "databricks").lower() == "local"
+
+
 def embed(endpoint: str, texts: List[str]) -> List[List[float]]:
     """Embed a batch of texts, preserving order.
 
@@ -114,6 +145,9 @@ def embed(endpoint: str, texts: List[str]) -> List[List[float]]:
     meaning to a different chunk, and nothing would look wrong until an answer
     cited a source with nothing to do with the question.
     """
+    if _use_local():
+        return _local().embed(texts)
+
     body = invoke(endpoint, {"input": texts})
     data = body["data"]
     ordered = sorted(data, key=lambda item: item.get("index", 0))
@@ -127,6 +161,9 @@ def embed(endpoint: str, texts: List[str]) -> List[List[float]]:
 
 def chat(endpoint: str, system: str, user: str, max_tokens: int = 250) -> str:
     """Ask a chat model and insist on getting text back."""
+    if _use_local():
+        return _local().chat(system, user, max_tokens=max_tokens)
+
     body = invoke(
         endpoint,
         {
