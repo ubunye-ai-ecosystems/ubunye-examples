@@ -1,0 +1,76 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Structured ingestion: Unity Catalog tables and SQL.
+#
+# Two ways to read a table, both used here on purpose:
+#   - `table:` — hand the whole table to Spark and do the work in transformations.py
+#   - `sql:`   — push the join down to the warehouse and read the result
+# Neither is more correct. Push down what the warehouse is good at (joins,
+# filters); keep in Spark what your business rule is about.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "8"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "8"
+
+CONFIG:
+  inputs:
+    # samples.bakehouse ships with every Databricks workspace — no upload,
+    # no egress, nothing to provision.
+    franchises:
+      format: unity
+      table: samples.bakehouse.sales_franchises
+
+    # The join runs in the warehouse; Spark receives the result. 20k transactions
+    # joined to 30-odd franchises is not work worth moving.
+    transactions:
+      format: unity
+      sql: |
+        SELECT t.transactionID,
+               t.customerID,
+               t.franchiseID,
+               t.dateTime,
+               t.product,
+               t.quantity,
+               t.totalPrice,
+               t.paymentMethod,
+               c.city    AS customer_city,
+               c.country AS customer_country
+        FROM samples.bakehouse.sales_transactions t
+        LEFT JOIN samples.bakehouse.sales_customers c
+          ON c.customerID = t.customerID
+
+  transform: {}
+
+  outputs:
+    # `merge` — so re-running the task corrects yesterday's rows instead of
+    # duplicating them. This is what makes a pipeline safe to re-run, which is
+    # the difference between a job you can retry and a job you must babysit.
+    franchise_revenue:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.franchise_revenue"
+      mode: merge
+      merge_keys: ["franchiseID", "revenue_month"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Revenue per franchise per month, from samples.bakehouse."
+
+    # `overwrite_partitions` — a backfill of one month replaces that month and
+    # leaves every other month standing. `overwrite` would wipe the table.
+    product_revenue:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.product_revenue"
+      mode: overwrite_partitions
+      partitionBy: ["revenue_month"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Revenue per product per month, from samples.bakehouse."

@@ -1,0 +1,59 @@
+MODEL: "ml"
+VERSION: "1.0.0"
+
+# Model engineering: clean -> features -> split -> train -> validate -> register.
+# One task, because all of it is in service of a single question — "is this
+# artifact fit to be registered?" — and none of it is useful on its own.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "8"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "8"
+
+CONFIG:
+  inputs:
+    # samples.nyctaxi ships with every Databricks workspace, including Free
+    # Edition — no upload, no egress, nothing to set up.
+    trips:
+      format: unity
+      sql: |
+        -- The modelling pool: 80% of the trips, chosen by a hash so the same rows
+        -- land here on every run. The other 20% is never seen by this task at all
+        -- — that is what batch_inference scores, so its predictions are on data
+        -- the model has genuinely never met.
+        --
+        -- (The filtered table holds ~21.8k rows. An earlier version of this config
+        -- said LIMIT 200000 / OFFSET 200000 and the inference task would have
+        -- scored exactly nothing.)
+        SELECT tpep_pickup_datetime,
+               tpep_dropoff_datetime,
+               trip_distance,
+               fare_amount,
+               pickup_zip,
+               dropoff_zip
+        FROM samples.nyctaxi.trips
+        WHERE fare_amount BETWEEN 2.5 AND 200
+          AND trip_distance BETWEEN 0.1 AND 100
+          AND abs(hash(tpep_pickup_datetime, trip_distance, fare_amount)) % 10 < 8
+
+  transform: {}
+
+  outputs:
+    # What the task produces for the world to see. The model artifact itself
+    # goes to the registry (a UC volume) — this table is the audit trail:
+    # one row per metric, per version, so `SELECT * WHERE metric='test_rmse'`
+    # tells you how every model you ever trained scored on unseen data.
+    model_metrics:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_fare_model_metrics"
+      mode: append
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "One row per metric per trained version of the taxi fare model."

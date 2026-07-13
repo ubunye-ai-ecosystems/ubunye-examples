@@ -1,0 +1,66 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Unstructured ingestion: free text in, a chunked index out.
+#
+# Two sources, because "unstructured" means two different problems:
+#   - `unity`  — 204 real customer reviews. Text that lives in a table.
+#   - `binary` — arbitrary files on a volume (PDFs, .txt, images). Spark's
+#                binaryFile source: one row per file, with the raw bytes.
+#
+# The binary reader is the one people never find. It gives you
+# path / modificationTime / length / content, and content is the file itself.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    reviews:
+      format: unity
+      table: samples.bakehouse.media_customer_reviews
+
+    # The corpus is committed to this repo and copied onto a UC volume by
+    # notebooks/00_setup.py. Nothing is downloaded — serverless compute cannot
+    # be relied on to reach the internet, and an example that needs egress is an
+    # example most people cannot run.
+    files:
+      format: binary
+      path: "/Volumes/{{ env.UBUNYE_CATALOG | default('workspace') }}/{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}/corpus"
+      path_glob_filter: "*.txt"
+      recursive: true
+
+  transform: {}
+
+  outputs:
+    # One row per document, whatever its origin. A review and a file are both
+    # "a document with text" by the time they land here.
+    documents:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.documents"
+      mode: merge
+      merge_keys: ["doc_id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "One row per ingested document (reviews + files)."
+
+    # Chunked and ready to embed. This is the shape a vector index wants:
+    # small, overlapping windows with a stable id back to the source document.
+    document_chunks:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.document_chunks"
+      mode: merge
+      merge_keys: ["chunk_id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Overlapping word-window chunks, ready for embedding."

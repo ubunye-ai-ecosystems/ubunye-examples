@@ -1,0 +1,7 @@
+The Lakehouse Pattern
+
+A data lake stores anything cheaply and guarantees nothing. A data warehouse guarantees a great deal and stores only what it was told about in advance. For twenty years teams ran both, copied data between them nightly, and spent their mornings explaining why the two disagreed.
+
+The lakehouse is the observation that the guarantees a warehouse provides — transactions, schema enforcement, time travel — are properties of a table format, not of a storage engine. Put an ACID table format on top of cheap object storage and you get both: files anyone can read, with a transaction log that says which files count.
+
+What follows from this is unglamorous but decisive. A failed job no longer leaves half-written parquet behind for the next reader to trip over. A backfill of one partition no longer means rewriting a table. A reader at 09:00 sees exactly what a reader at 09:01 sees, even while a writer is midway through committing. None of this is exciting. All of it is the difference between a pipeline you can retry and a pipeline you must babysit.

@@ -1,0 +1,7 @@
+Gates Before Registries
+
+A model registry that accepts every model is a filing cabinet. Its value is not that it stores artifacts — object storage does that — but that it can answer one question honestly: is there a model here that is fit to use?
+
+That question can only be answered on data the model has not seen. Metrics from the training split tell you the model was able to memorise; they say nothing about tomorrow. A gate evaluated on training metrics is theatre: the model marks its own homework and always passes.
+
+So the order matters. Fit on the training split. Score on the holdout. Judge the holdout numbers against a threshold agreed in advance. Only then register. A model that cannot clear the bar is not an artifact to be stored with a warning label attached — it is a failed experiment, and it should not be in the registry at all, because someone downstream will eventually load 'the latest model' without reading the label.

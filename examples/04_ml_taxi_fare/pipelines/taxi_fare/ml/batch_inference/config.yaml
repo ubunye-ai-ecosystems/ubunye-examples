@@ -1,0 +1,54 @@
+MODEL: "ml"
+VERSION: "1.0.0"
+
+# Batch inference: load whatever model is in production and score new instances.
+#
+# This task never trains, never validates, never decides anything about model
+# quality. It asks the registry for the production model and uses it. Which
+# model that is, is a deployment decision made by the registry — promote a new
+# version and this task picks it up on its next run, with no code change here.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "8"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "8"
+
+CONFIG:
+  inputs:
+    # "New instances" — trips the model has not scored before. In a real system
+    # this is today's arrivals; here it is a slice of the same public table, held
+    # out by the LIMIT/OFFSET so it is genuinely unseen data.
+    new_trips:
+      format: unity
+      sql: |
+        -- The held-back 20%: rows the model_engineering task never loaded, let
+        -- alone fitted on. These are the "new instances".
+        SELECT tpep_pickup_datetime,
+               tpep_dropoff_datetime,
+               trip_distance,
+               fare_amount,
+               pickup_zip,
+               dropoff_zip
+        FROM samples.nyctaxi.trips
+        WHERE fare_amount BETWEEN 2.5 AND 200
+          AND trip_distance BETWEEN 0.1 AND 100
+          AND abs(hash(tpep_pickup_datetime, trip_distance, fare_amount)) % 10 >= 8
+
+  transform: {}
+
+  outputs:
+    predictions:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_fare_predictions"
+      mode: overwrite_partitions
+      partitionBy: ["scored_date"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Fare predictions from the production taxi fare model."

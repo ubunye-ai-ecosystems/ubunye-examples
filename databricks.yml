@@ -1,0 +1,98 @@
+# One bundle, every example. `databricks bundle deploy` puts them all in the
+# workspace; `databricks bundle run <job>` executes one.
+#
+# There is no `new_cluster` block anywhere in this file, and that is deliberate:
+# a task with no cluster key runs on serverless, which is the only compute a free
+# Databricks workspace has. Adding a cluster spec here would make every example
+# undeployable for most of the people it is written for.
+
+bundle:
+  name: ubunye-examples
+
+variables:
+  catalog:
+    description: Unity Catalog catalog the examples write to.
+    default: workspace
+  schema:
+    description: Unity Catalog schema the examples write to.
+    default: ubunye_examples
+  data_timestamp:
+    description: The `dt` passed to every task.
+    default: "2026-07-13"
+
+sync:
+  include:
+    - examples/**
+
+resources:
+  jobs:
+    # ---- ingestion -------------------------------------------------------
+    ingest_tables_sql:
+      name: "[ubunye] 01 · ingest structured — tables + SQL"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: customer_revenue
+          notebook_task:
+            notebook_path: ./examples/01_ingest_tables_sql/notebooks/run_customer_revenue.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/01_ingest_tables_sql/pipelines/retail/ingestion/customer_revenue
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+    ingest_unstructured:
+      name: "[ubunye] 03 · ingest unstructured — text + files"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: document_index
+          notebook_task:
+            notebook_path: ./examples/03_ingest_unstructured/notebooks/run_document_index.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/03_ingest_unstructured/pipelines/docs/ingestion/document_index
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+    # ---- ML --------------------------------------------------------------
+    # Two tasks, in order. Inference depends on engineering because it loads the
+    # model that task registered — and if the model failed its quality gate,
+    # nothing was registered and this job stops rather than scoring with a stale
+    # one. That dependency is the deployment story, expressed as a DAG edge.
+    ml_taxi_fare:
+      name: "[ubunye] 04 · ML — model engineering, then batch inference"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: model_engineering
+          notebook_task:
+            notebook_path: ./examples/04_ml_taxi_fare/notebooks/run_model_engineering.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/04_ml_taxi_fare/pipelines/taxi_fare/ml/model_engineering
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        - task_key: batch_inference
+          depends_on:
+            - task_key: model_engineering
+          notebook_task:
+            notebook_path: ./examples/04_ml_taxi_fare/notebooks/run_batch_inference.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/04_ml_taxi_fare/pipelines/taxi_fare/ml/batch_inference
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+targets:
+  # For a human deploying from a laptop. `mode: development` prefixes the job
+  # names and pauses schedules, so you cannot accidentally trample a real one.
+  dev:
+    mode: development
+    default: true
+
+  # For CI. Authenticates with a service principal — see .github/workflows.
+  ci:
+    mode: development
