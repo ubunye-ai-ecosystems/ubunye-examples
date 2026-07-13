@@ -22,13 +22,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/platforms/spark_env.sh"
 
 # --- the three variables that ARE the portability surface ----------------------
-export SPARK_MASTER="${SPARK_MASTER:-local[*]}"
+# NOT defaulted to local[*]: an unset master means "let the platform decide", which
+# is exactly what EMR Serverless and Dataproc need. platforms/local/run.sh sets it
+# explicitly, because a laptop genuinely has no other master.
+export SPARK_MASTER="${SPARK_MASTER:-}"
 export UBUNYE_SINK="${UBUNYE_SINK:-s3}"
 export UBUNYE_DATA_ROOT="${UBUNYE_DATA_ROOT:-file://${DATA}}"
 
 echo "example   : ${EXAMPLE}"
 echo "tasks     : ${TASKS[*]}"
-echo "master    : ${SPARK_MASTER}"
+echo "master    : ${SPARK_MASTER:-<platform default>}"
 echo "sink      : ${UBUNYE_SINK}"
 echo "data root : ${UBUNYE_DATA_ROOT}"
 

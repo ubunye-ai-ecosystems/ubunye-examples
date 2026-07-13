@@ -39,7 +39,19 @@ esac
 # Adding a JDBC driver to open-source Spark is one Maven coordinate. It is Databricks
 # SERVERLESS that cannot do it — which is why example 09 runs here and not there.
 PACKAGES="${DELTA_PKG},org.postgresql:postgresql:42.7.4"
-CONF="--conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+# The master is the platform's business, never the pipeline's.
+#
+# Leave SPARK_MASTER unset in a cloud (EMR Serverless, Dataproc) and the platform's own
+# master stands. Force it here and you would override the cluster with local[*], run the
+# whole job inside the driver -- successfully, silently, on compute you are paying for --
+# and never touch an executor. A silently single-node run is worse than a crash: a crash
+# tells you.
+MASTER_CONF=""
+if [ -n "${SPARK_MASTER:-}" ]; then
+  MASTER_CONF="--conf spark.master=${SPARK_MASTER}"
+fi
+
+CONF="${MASTER_CONF} --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
 --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
 --conf spark.sql.catalogImplementation=hive \
 --conf spark.sql.warehouse.dir=${DATA}/warehouse \
