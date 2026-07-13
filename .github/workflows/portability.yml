@@ -105,6 +105,55 @@ jobs:
         run: |
           platforms/run_task.sh examples/04_ml_taxi_fare taxi_fare ml             feature_engineering model_training batch_inference
 
+      - name: 03 · unstructured — off Databricks
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          UBUNYE_CORPUS: file:///tmp/ubunye/corpus
+        run: platforms/run_task.sh examples/03_ingest_unstructured docs ingestion document_index
+
+      - name: Install the open-source model stack
+        # The two examples that "could not leave Databricks" only could not because
+        # they call Databricks-hosted serving endpoints. A hosted model has an
+        # open-source substitute that runs on a CPU with no API key and no account.
+        run: pip install "sentence-transformers>=3" "transformers>=4.44" "torch>=2.2" --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: 05 · RAG — with open-source models, no endpoint
+        # MODEL_BACKEND=local swaps databricks-bge-large-en for MiniLM and
+        # llama-3.1-8b for Qwen2.5-0.5B. The config.yaml does not move. The pipeline
+        # does not move. Which model answers is business logic, and it lives in
+        # serving.py where business logic belongs.
+        #
+        # The answers WILL be worse than an 8B model's, and that is not the claim.
+        # The claim is that the process — chunk, embed, retrieve by cosine, ground the
+        # answer, cite the sources — runs with no Databricks at all.
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          MODEL_BACKEND: local
+          TORCH_THREADS: "2"
+        run: |
+          platforms/run_task.sh examples/05_rag_documents rag knowledge embed_chunks answer_questions
+
+      - name: 06 · distillation — an open teacher, an open student
+        # The teacher was an 8B Databricks endpoint; now it is Qwen2.5-0.5B on the CPU.
+        # The student was, and remains, DistilBERT. Distillation is teacher -> student;
+        # neither has to be hosted by anyone.
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          MODEL_BACKEND: local
+          TORCH_THREADS: "2"
+          STUDENT_MODEL_STORE: /tmp/ubunye/model_store
+        run: |
+          platforms/run_task.sh examples/06_finetune_llm reviews nlp label_reviews finetune_classifier
+
       - name: What actually landed on disk
         run: |
           . platforms/spark_env.sh
@@ -130,7 +179,10 @@ jobs:
           print()
           expected = ["franchise_revenue", "product_revenue",          # 01
                       "clean_transactions", "quarantined_transactions", "contract_results",  # 07
-                      "taxi_features", "taxi_model_metrics", "taxi_fare_predictions"]        # 04
+                      "taxi_features", "taxi_model_metrics", "taxi_fare_predictions",        # 04
+                      "documents", "document_chunks",                                        # 03
+                      "chunk_embeddings", "rag_answers",                                     # 05
+                      "labelled_reviews", "student_model_metrics"]                           # 06
           for t in expected:
               n = spark.table(f"ubunye_examples.{t}").count()
               print(f"  table  {t:<28} {n:>7} rows")
@@ -389,6 +441,50 @@ jobs:
       - name: Submit to Dataproc Serverless
         if: steps.creds.outputs.ok == 'true'
         run: platforms/gcp/submit.sh
+
+  models-in-a-container:
+    name: RAG + distillation in Docker and Kubernetes (open models)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the base image
+        run: docker build -f platforms/docker/Dockerfile -t ubunye-portable:ci .
+
+      - name: Build the model image — weights baked IN
+        # The weights are downloaded at BUILD time, then HF_HUB_OFFLINE=1 forbids the
+        # network. A container that fetches a gigabyte on every start silently depends
+        # on the internet, which a locked-down cluster or a VPC-isolated cloud job does
+        # not have -- and that failure arrives after you have paid to start the job.
+        #
+        # This is the SAME artifact EMR Serverless and Dataproc Serverless take as a
+        # custom container image. One image, four platforms; only the registry differs.
+        run: |
+          docker build -f platforms/docker/Dockerfile.ml             --build-arg BASE=ubunye-portable:ci -t ubunye-ml:ci .
+          docker images ubunye-ml:ci --format "  image size: {{.Size}}"
+
+      - name: Seed + 03 + 05 + 06, in the container
+        # One container run: the metastore has to survive between tasks, and a fresh
+        # container per task would throw it away.
+        run: |
+          docker run --rm             -e WITH_DISTILLATION=true             --entrypoint /app/platforms/models_demo.sh             ubunye-ml:ci
+
+      - name: Create a Kubernetes cluster
+        uses: helm/kind-action@v1
+        with: { cluster_name: ubunye-ml }
+
+      - name: Load the model image into the cluster
+        run: kind load docker-image ubunye-ml:ci --name ubunye-ml
+
+      - name: Run RAG on Kubernetes
+        # The SAME script the container ran. The pod gets the bootstrap too -- the first
+        # version told it to "run example 05" alone, and 05 reads the chunks that 03
+        # produces, so it sat on an empty volume with nothing to read until it timed out.
+        run: |
+          set -euo pipefail
+          kubectl apply -f platforms/k8s/job-models.yaml
+          kubectl wait --for=condition=complete --timeout=25m job/ubunye-rag             || { echo "--- pod logs ---"; kubectl logs job/ubunye-rag --tail=80; exit 1; }
+          kubectl logs job/ubunye-rag | tail -25
 
   identical:
     name: every platform produced the same output

@@ -34,7 +34,10 @@ CONFIG:
     # example most people cannot run.
     files:
       format: binary
-      path: "/Volumes/{{ env.UBUNYE_CATALOG | default('workspace') }}/{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}/corpus"
+      # A UC volume on Databricks; a directory, a container mount or an object store
+      # anywhere else. Spark's binaryFile reader takes any URI its Hadoop layer
+      # understands, so one templated value covers /Volumes, file://, s3a:// and gs://.
+      path: "{{ env.UBUNYE_CORPUS | default('/Volumes/' ~ (env.UBUNYE_CATALOG | default('workspace')) ~ '/' ~ (env.UBUNYE_SCHEMA | default('ubunye_examples')) ~ '/corpus') }}"
       path_glob_filter: "*.txt"
       recursive: true
 

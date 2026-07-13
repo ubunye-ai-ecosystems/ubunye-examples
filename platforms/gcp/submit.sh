@@ -9,6 +9,24 @@
 # Run platforms/gcp/setup.sh once to create them.
 set -euo pipefail
 
+# --- running the MODEL examples (05 RAG, 06 distillation) on Dataproc -------------
+#
+# Dataproc Serverless takes a CUSTOM CONTAINER IMAGE, and platforms/docker/Dockerfile.ml
+# is exactly that image -- the same one Docker and Kubernetes run.
+#
+#   gcloud artifacts repositories create ubunye --repository-format=docker --location="$REGION"
+#   IMG="${REGION}-docker.pkg.dev/${GCP_PROJECT}/ubunye/ubunye-ml:latest"
+#   docker build -f platforms/docker/Dockerfile   -t ubunye-portable:ci .
+#   docker build -f platforms/docker/Dockerfile.ml --build-arg BASE=ubunye-portable:ci -t "$IMG" .
+#   gcloud auth configure-docker "${REGION}-docker.pkg.dev" && docker push "$IMG"
+#
+# then add to the submit below:
+#   --container-image "$IMG"
+#   --properties spark.yarn.appMasterEnv.MODEL_BACKEND=local,spark.executorEnv.MODEL_BACKEND=local
+#
+# The weights are baked into the image, so the batch does not reach for the network.
+
+
 : "${GCP_PROJECT:?}" "${GCP_BUCKET:?}"
 REGION="${GCP_REGION:-europe-west1}"
 EXAMPLE="${1:-examples/11_run_anywhere}"
