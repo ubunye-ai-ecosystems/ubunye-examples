@@ -199,22 +199,6 @@ jobs:
     outputs:
       fingerprint: ${{ steps.run.outputs.fingerprint }}
 
-    services:
-      # A real S3-compatible server. Not a mock, not a stub -- the pipeline talks to it
-      # through Hadoop's actual S3A connector, the same one it would use against AWS.
-      #
-      # This answers the part of the cloud question that lives in OUR code: does the
-      # task read and write an object store instead of a disk, with no change to any
-      # config? It does NOT prove EMR or Dataproc as a compute host, and nothing here
-      # claims it does -- that needs an account and costs money.
-      minio:
-        image: bitnami/minio:latest
-        ports: ["9000:9000"]
-        env:
-          MINIO_ROOT_USER: ubunye
-          MINIO_ROOT_PASSWORD: ubunye-secret
-          MINIO_DEFAULT_BUCKETS: ubunye
-
     env:
       S3_ENDPOINT: http://localhost:9000
       S3_ACCESS_KEY: ubunye
@@ -232,6 +216,18 @@ jobs:
 
       - name: Install the released engine + Spark + Delta
         run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark]==0.3.0" "requests>=2.28"
+
+      - name: Start MinIO — a real S3-compatible server
+        # Started as a plain container, NOT a `services:` block. The official minio
+        # image needs a `server /data` command, and GitHub service containers cannot
+        # override a command. (The first version used bitnami/minio, which starts a
+        # server by default — and Bitnami has since withdrawn their public `latest`
+        # tags, so the pull failed with `manifest unknown`.)
+        #
+        # Not a mock and not a stub: the pipeline talks to this through Hadoop's actual
+        # S3A connector, the same one it would use against AWS.
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=ubunye             -e MINIO_ROOT_PASSWORD=ubunye-secret             minio/minio:latest server /data
 
       - name: Wait for MinIO, and stage the corpus INTO the bucket
         # The bootstrap is the platform's job. On Databricks a notebook copies the
