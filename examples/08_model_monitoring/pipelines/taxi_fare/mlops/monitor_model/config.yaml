@@ -1,0 +1,101 @@
+MODEL: "ml"
+VERSION: "1.0.0"
+
+# Model monitoring — the half of MLOps that MLflow does not do.
+#
+# MLflow is a logbook. It records what happened at TRAINING time: params, metrics
+# on a test set, which version was promoted. It is a record of a past event,
+# written by you, about data you had. After promotion it never looks at the model
+# again, and it cannot change what is serving.
+#
+# A quality gate stops a bad model being BORN (example 04). Monitoring catches the
+# one that got past, and the one that was fine until the world moved. Different
+# failures, different remedies — and the remedy is the interesting part:
+#
+#   * The world moved and no registered model knows the new world
+#       -> rolling back is theatre. Every version is equally wrong. RETRAIN.
+#   * The live model is simply worse than one you already have
+#       -> ROLL BACK. This is the only thing a rollback actually fixes.
+#
+# A monitor that answers every alarm with "roll back" is as useless as one that
+# answers with nothing. This task measures which case it is before it acts.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    # What the model learned from — the distribution it believes the world has.
+    reference:
+      format: unity
+      sql: |
+        SELECT trip_distance, trip_minutes, pickup_hour, pickup_dow,
+               pickup_zip, dropoff_zip, fare_amount
+        FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        WHERE split = 'train'
+
+    # The world as it is now: the held-out scoring slice, with the true fares.
+    #
+    # DRIFT_FACTOR inflates every fare. At the default 1.35 this is a year of
+    # inflation — the single most common way a good model goes bad — and it is
+    # injected on purpose, because a monitor whose alarm never fires is a smoke
+    # detector with no battery: it passes every test and is wired to nothing.
+    #
+    # Set DRIFT_FACTOR=1.0 for the undrifted world (measured: target PSI 0.0014).
+    #
+    # Note what is NOT multiplied: trip_distance, trip_minutes, pickup_hour.
+    # Inflation changes what a trip COSTS, not how far it GOES. The inputs are
+    # untouched — and that is the whole point of this example (see the README).
+    live:
+      format: unity
+      sql: |
+        SELECT trip_distance, trip_minutes, pickup_hour, pickup_dow,
+               pickup_zip, dropoff_zip,
+               fare_amount * {{ env.DRIFT_FACTOR | default('1.35') }} AS fare_amount
+        FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        WHERE split = 'score'
+
+  transform: {}
+
+  outputs:
+    # Per feature, per run: how far today's data has moved from what the model was
+    # trained on. This is what you graph — and what tells you the model is dying
+    # before the finance team does.
+    model_monitoring:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.model_monitoring"
+      mode: append
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Input/target drift (PSI) and the live model's error, per feature, per run."
+
+    # Every registered version, scored on the SAME live window. This is the
+    # evidence behind the decision: it is what lets the monitor say "rolling back
+    # would not help" with a number instead of a shrug.
+    model_candidates:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.model_candidates"
+      mode: append
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Champion vs challengers: every registry version's error on today's data."
+
+    # What the monitor DID about it. An alert nobody acts on is a log line.
+    monitoring_incidents:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.monitoring_incidents"
+      mode: append
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Breaches detected, the diagnosis, and the action taken — including rollbacks."

@@ -33,18 +33,30 @@ task. They differ in what `transformations.py` says, not in shape.
 
 ## The examples
 
+**Ingestion**
+
 | | Example | Reads | Shows |
 |---|---|---|---|
 | **01** | [Structured — tables + SQL](examples/01_ingest_tables_sql) | `samples.bakehouse` | Reading a table *and* pushing a join down as SQL; writing with `merge` (safe to re-run) and `overwrite_partitions` (safe to backfill) |
 | **02** | [Structured — REST API](examples/02_ingest_rest_api) | Open-Meteo public API | The `rest_api` connector: query params, rate limiting, retries — and fanning one JSON document out into 168 rows |
 | **03** | [Unstructured — text + files](examples/03_ingest_unstructured) | 204 real customer reviews, plus `.txt` files on a volume | Spark's `binaryFile` source; chunking text into overlapping windows for embedding |
-| **04** | [ML — the full lifecycle](examples/04_ml_taxi_fare) | `samples.nyctaxi.trips` | Two tasks: **produce a model**, then **use it** |
+
+**ML and MLOps**
+
+| | Example | Reads | Shows |
+|---|---|---|---|
+| **04** | [ML — the full lifecycle](examples/04_ml_taxi_fare) | `samples.nyctaxi.trips` | Features → train → validate → gate → register → score. **Produce a model**, then **use it** |
+| **05** | [RAG](examples/05_rag_documents) | the document chunks from 03 | Embeddings and a chat model on the workspace's own serving endpoints; retrieval, then a grounded answer |
+| **06** | [Fine-tuning an open LLM](examples/06_finetune_llm) | `samples.bakehouse` reviews | An LLM labels the data, a small DistilBERT **learns from it** and is gated on `recall_negative` — distillation, end to end |
+| **07** | [Data quality — a contract, enforced](examples/07_data_quality) | `samples.bakehouse` | Rules with severities; bad rows **quarantined, not dropped**; the run fails when the breach is structural |
+| **08** | [Model monitoring & rollback](examples/08_model_monitoring) | the model and features from 04 | Drift, decay, and champion-vs-challengers — and **why a rollback is the right answer to only one of them** |
 
 ### The ML example is two tasks, not five
 
 | Task | Does |
 |---|---|
-| `model_engineering` | clean → features → split → train → **validate on data it never saw** → gate → register |
+| `feature_engineering` | clean → features → deterministic train/test/score split |
+| `model_training` | train → **validate on data it never saw** → gate → register → promote |
 | `batch_inference` | load whatever model is in **production** → score new instances |
 
 The split is *"produce a model"* vs *"use a model."* Validation lives with training
@@ -54,6 +66,14 @@ something nobody vetted.
 
 Shipping a better model is a **promotion in the registry**, not a code change to the
 inference task.
+
+### And a gate is not monitoring
+
+A gate stops a bad model being **born**. It cannot help you afterwards, and neither can
+MLflow — a logbook of what happened at training time, which never looks at the model
+again and cannot change what is serving. Example **08** is the other half: it catches
+the model that got past the gate, *and* the one that was fine until the world moved —
+and it tells the two apart, because **a rollback only fixes one of them**.
 
 ---
 

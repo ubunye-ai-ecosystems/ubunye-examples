@@ -86,3 +86,11 @@ jobs:
       - name: Run — 07 · data quality (contract, quarantine, fail loudly)
         if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
         run: databricks bundle run data_quality --target ci
+
+      - name: Run — 08 · model monitoring (drift, decay, rollback)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        # Must come after 04: it monitors 04's model and reads its feature table.
+        # It deliberately registers a broken model and rolls it back, so it leaves
+        # the registry with a healthy production version — 04's inference task on
+        # the next run still has something to load. The notebook asserts that.
+        run: databricks bundle run model_monitoring --target ci

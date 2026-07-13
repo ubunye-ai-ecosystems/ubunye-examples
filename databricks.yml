@@ -186,6 +186,20 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    model_monitoring:
+      name: "[ubunye] 08 · Model monitoring — drift, decay, rollback"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: monitor_model
+          notebook_task:
+            notebook_path: ./examples/08_model_monitoring/notebooks/run_monitor_model.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/08_model_monitoring/pipelines/taxi_fare/mlops/monitor_model
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job
   # names and pauses schedules, so you cannot accidentally trample a real one.
