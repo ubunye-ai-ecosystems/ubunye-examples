@@ -28,14 +28,18 @@ VERSION: "1.0.0"
 
 ENGINE:
   spark_conf:
-    # The one line that moves the job between a laptop, a cluster and a cloud.
-    #   local[*]                      a laptop, a CI runner, a Docker container
-    #   k8s://https://<api-server>    Kubernetes
-    #   yarn                          Hadoop / EMR on EC2
-    # On Databricks it is ignored — the platform owns the session, and the engine
-    # attaches to the one that already exists rather than building its own.
-    spark.master: "{{ env.SPARK_MASTER | default('local[*]') }}"
     spark.sql.shuffle.partitions: "2"
+
+    # Note what is NOT here: spark.master.
+    #
+    # It was here, defaulted to `local[*]`, and it was a loaded gun. On EMR Serverless
+    # and Dataproc the PLATFORM sets the master — and this config would have overridden
+    # it, running the whole job inside the driver, ignoring every executor on a cluster
+    # you are paying for, and reporting success. A silently single-node run is worse
+    # than a crash: a crash tells you.
+    #
+    # Which master to use is a fact about where the job landed, not about what the job
+    # does. It lives in platforms/spark_env.sh with the rest of the platform's business.
 
     # Note what is NOT here: the Delta-on-open-source-Spark extensions.
     #

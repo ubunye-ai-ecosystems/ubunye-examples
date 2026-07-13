@@ -14,6 +14,7 @@ rm -rf "${DATA_DIR}/corpus" "${DATA_DIR}/documents" "${DATA_DIR}/document_chunks
 mkdir -p "${DATA_DIR}/corpus"
 cp "$ROOT"/examples/11_run_anywhere/data/corpus/*.txt "${DATA_DIR}/corpus/"
 
+export SPARK_MASTER="${SPARK_MASTER:-local[*]}"   # a laptop has no other master
 "$ROOT/platforms/run_task.sh" examples/11_run_anywhere portable ingestion document_index
 
 # The fingerprint needs Spark too — and it needs the SAME Spark. Sourcing rather than

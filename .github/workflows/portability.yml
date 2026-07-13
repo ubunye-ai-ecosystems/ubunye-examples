@@ -253,10 +253,147 @@ jobs:
           python platforms/fingerprint.py s3a://ubunye/documents s3a://ubunye/document_chunks | tee out.txt
           echo "fingerprint=$(grep -oP 'FINGERPRINT=.*' out.txt | cut -d= -f2)" >> "$GITHUB_OUTPUT"
 
+  spark-submit:
+    name: spark-submit (the shape AWS EMR and GCP Dataproc use)
+    runs-on: ubuntu-latest
+    outputs:
+      fingerprint: ${{ steps.run.outputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Install the released engine + Spark + Delta
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark]==0.3.0" "requests>=2.28"
+
+      - name: Submit the job the way a cloud does
+        id: run
+        # EMR Serverless and Dataproc do NOT run `ubunye run`. There is no shell and no
+        # console script on PATH — they hand a Python file to spark-submit. Every other
+        # job in this matrix goes through the CLI, so this invocation shape was entirely
+        # untested, and it is exactly where a first cloud run would fail.
+        #
+        # This proves it for free. The only thing left unknown about AWS and GCP is then
+        # "does the cloud accept our job", not "does our code work when submitted".
+        #
+        # Note SPARK_MASTER is deliberately NOT set: unset means "let the platform
+        # decide", which is what a cloud needs. spark-submit defaults to local[*] here.
+        run: |
+          set -euo pipefail
+          DATA=/tmp/ubunye
+          rm -rf "$DATA"; mkdir -p "$DATA/corpus"
+          cp examples/11_run_anywhere/data/corpus/*.txt "$DATA/corpus/"
+
+          export UBUNYE_SINK=s3
+          export UBUNYE_DATA_ROOT="file://$DATA"
+
+          spark-submit             --packages io.delta:delta-spark_2.12:3.2.0             --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension             --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog             --py-files platforms/fingerprint.py             platforms/spark_entrypoint.py             --task-dir examples/11_run_anywhere/pipelines/portable/ingestion/document_index             --mode PROD --dt 2026-07-13             --fingerprint "$DATA/documents" "$DATA/document_chunks" | tee out.txt
+
+          echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
+
+  aws:
+    name: AWS EMR Serverless (skips unless configured)
+    runs-on: ubuntu-latest
+    # Skips cleanly when the secrets are absent, exactly like deploy.yml. It is not
+    # "unsupported" — it is unconfigured, and the difference matters: the day an account
+    # exists, four secrets turn this green with no code change.
+    #
+    # I never see the keys. platforms/aws/setup.sh (run by the repo owner) creates a
+    # bucket, a scoped IAM job role and an EMR Serverless application, and prints the
+    # `gh secret set` lines. CI holds them; CI runs the job; I read the log.
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_EMR_APPLICATION_ID: ${{ secrets.AWS_EMR_APPLICATION_ID }}
+      AWS_EMR_JOB_ROLE_ARN: ${{ secrets.AWS_EMR_JOB_ROLE_ARN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Are we configured for AWS?
+        id: creds
+        run: |
+          if [[ -n "${AWS_S3_BUCKET}" && -n "${AWS_EMR_APPLICATION_ID}" && -n "${AWS_EMR_JOB_ROLE_ARN}" ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No AWS secrets — skipping EMR Serverless. Run platforms/aws/setup.sh to configure."
+          fi
+
+      - name: Say plainly whether this ran
+        # A green tick on a job that SKIPPED reads as "the cloud works". It does not
+        # work; it was never asked. Put the truth in the run summary where it cannot be
+        # mistaken for a result — the whole point of this repo is that a green build
+        # means something was actually executed.
+        run: |
+          if [ "${{ steps.creds.outputs.ok }}" = "true" ]; then
+            echo "### AWS EMR Serverless: RAN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### AWS EMR Serverless: **NOT RUN** — no credentials configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This job is green because it was skipped, not because it passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Run \`platforms/aws/setup.sh\` and set the secrets it prints to turn this into a real run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Submit to EMR Serverless
+        if: steps.creds.outputs.ok == 'true'
+        run: platforms/aws/submit.sh
+
+  gcp:
+    name: GCP Dataproc Serverless (skips unless configured)
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      GCP_BUCKET: ${{ secrets.GCP_BUCKET }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Are we configured for GCP?
+        id: creds
+        run: |
+          if [[ -n "${GCP_PROJECT}" && -n "${GCP_BUCKET}" ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No GCP secrets — skipping Dataproc. Run platforms/gcp/setup.sh to configure."
+          fi
+
+      - uses: google-github-actions/auth@v2
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.creds.outputs.ok == 'true'
+
+      - name: Say plainly whether this ran
+        # A green tick on a job that SKIPPED reads as "the cloud works". It does not
+        # work; it was never asked. Put the truth in the run summary where it cannot be
+        # mistaken for a result — the whole point of this repo is that a green build
+        # means something was actually executed.
+        run: |
+          if [ "${{ steps.creds.outputs.ok }}" = "true" ]; then
+            echo "### GCP Dataproc Serverless: RAN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### GCP Dataproc Serverless: **NOT RUN** — no credentials configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This job is green because it was skipped, not because it passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Run \`platforms/gcp/setup.sh\` and set the secrets it prints to turn this into a real run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Submit to Dataproc Serverless
+        if: steps.creds.outputs.ok == 'true'
+        run: platforms/gcp/submit.sh
+
   identical:
     name: every platform produced the same output
     runs-on: ubuntu-latest
-    needs: [local, docker, kubernetes, object-store]
+    needs: [local, docker, kubernetes, object-store, spark-submit]
     steps:
       - name: Compare the fingerprints
         run: |
@@ -265,18 +402,20 @@ jobs:
           DOCKER='${{ needs.docker.outputs.fingerprint }}'
           K8S='${{ needs.kubernetes.outputs.fingerprint }}'
           S3A='${{ needs.object-store.outputs.fingerprint }}'
+          SUBMIT='${{ needs.spark-submit.outputs.fingerprint }}'
 
           printf '  %-22s %s\n' "local Spark:" "$LOCAL" "Docker:" "$DOCKER" "Kubernetes:" "$K8S"
 
           # An empty fingerprint means the run produced nothing and the grep found
           # nothing — which would otherwise sail through as "all three matched".
           echo "  object store (s3a): $S3A"
-          for f in "$LOCAL" "$DOCKER" "$K8S" "$S3A"; do
+          echo "  spark-submit      : $SUBMIT"
+          for f in "$LOCAL" "$DOCKER" "$K8S" "$S3A" "$SUBMIT"; do
             [ -n "$f" ] || { echo "::error::a platform produced NO fingerprint"; exit 1; }
           done
 
-          if [ "$LOCAL" = "$DOCKER" ] && [ "$LOCAL" = "$K8S" ] && [ "$LOCAL" = "$S3A" ]; then
-            echo "::notice::identical output on local, Docker, Kubernetes and s3a:// — $LOCAL"
+          if [ "$LOCAL" = "$DOCKER" ] && [ "$LOCAL" = "$K8S" ]              && [ "$LOCAL" = "$S3A" ] && [ "$LOCAL" = "$SUBMIT" ]; then
+            echo "::notice::identical output — local, Docker, Kubernetes, s3a://, spark-submit — $LOCAL"
           else
             echo "::error::the platforms disagree. Same config, same code, different data."
             exit 1
