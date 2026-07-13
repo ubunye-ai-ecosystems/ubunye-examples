@@ -21,24 +21,14 @@ ENGINE:
 
 CONFIG:
   inputs:
-    # "New instances" — trips the model has not scored before. In a real system
-    # this is today's arrivals; here it is a slice of the same public table, held
-    # out by the LIMIT/OFFSET so it is genuinely unseen data.
+    # The `score` split: rows the feature-engineering task held back and the model
+    # was never fitted on. These are the "new instances" — in a real system this
+    # would be today's arrivals, and the config would be the only thing that changed.
     new_trips:
       format: unity
       sql: |
-        -- The held-back 20%: rows the model_engineering task never loaded, let
-        -- alone fitted on. These are the "new instances".
-        SELECT tpep_pickup_datetime,
-               tpep_dropoff_datetime,
-               trip_distance,
-               fare_amount,
-               pickup_zip,
-               dropoff_zip
-        FROM samples.nyctaxi.trips
-        WHERE fare_amount BETWEEN 2.5 AND 200
-          AND trip_distance BETWEEN 0.1 AND 100
-          AND abs(hash(tpep_pickup_datetime, trip_distance, fare_amount)) % 10 >= 8
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        WHERE split = 'score'
 
   transform: {}
 

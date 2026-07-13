@@ -1,0 +1,52 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Feature engineering. Clean, derive, and split — then stop.
+#
+# This task produces a table, not a model. That matters: the features are now a
+# thing you can look at, count, join, and diff between runs. When a model's
+# metrics move, the first question is always "did the data change or did the model
+# change?", and if features are computed inside the training task you cannot
+# answer it.
+#
+# The split is decided HERE and written down, so training and scoring cannot
+# disagree about which rows were held back.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "8"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "8"
+
+CONFIG:
+  inputs:
+    trips:
+      format: unity
+      sql: |
+        SELECT tpep_pickup_datetime,
+               tpep_dropoff_datetime,
+               trip_distance,
+               fare_amount,
+               pickup_zip,
+               dropoff_zip
+        FROM samples.nyctaxi.trips
+        WHERE fare_amount BETWEEN 2.5 AND 200
+          AND trip_distance BETWEEN 0.1 AND 100
+
+  transform: {}
+
+  outputs:
+    taxi_features:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features"
+      mode: overwrite
+      partitionBy: ["split"]
+      file_format: delta
+      options:
+        overwriteSchema: "true"
+        comment: "Model-ready taxi features. `split` is train | test | score."

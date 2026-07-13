@@ -75,22 +75,38 @@ resources:
     # nothing was registered and this job stops rather than scoring with a stale
     # one. That dependency is the deployment story, expressed as a DAG edge.
     ml_taxi_fare:
-      name: "[ubunye] 04 · ML — model engineering, then batch inference"
+      name: "[ubunye] 04 · ML — features, training, inference"
       max_concurrent_runs: 1
       tasks:
-        - task_key: model_engineering
+        - task_key: feature_engineering
           notebook_task:
-            notebook_path: ./examples/04_ml_taxi_fare/notebooks/run_model_engineering.py
+            notebook_path: ./examples/04_ml_taxi_fare/notebooks/run_feature_engineering.py
             base_parameters:
-              task_dir: ${workspace.file_path}/examples/04_ml_taxi_fare/pipelines/taxi_fare/ml/model_engineering
+              task_dir: ${workspace.file_path}/examples/04_ml_taxi_fare/pipelines/taxi_fare/ml/feature_engineering
               catalog: ${var.catalog}
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
 
+        - task_key: model_training
+          depends_on:
+            - task_key: feature_engineering
+          notebook_task:
+            notebook_path: ./examples/04_ml_taxi_fare/notebooks/run_model_training.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/04_ml_taxi_fare/pipelines/taxi_fare/ml/model_training
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        # Depends on training because it loads the model training registered. If
+        # the model failed its gate, nothing was registered, this task has nothing
+        # to load, and the job stops — which is correct. Scoring with an unvetted
+        # model is worse than not scoring at all.
         - task_key: batch_inference
           depends_on:
-            - task_key: model_engineering
+            - task_key: model_training
           notebook_task:
             notebook_path: ./examples/04_ml_taxi_fare/notebooks/run_batch_inference.py
             base_parameters:

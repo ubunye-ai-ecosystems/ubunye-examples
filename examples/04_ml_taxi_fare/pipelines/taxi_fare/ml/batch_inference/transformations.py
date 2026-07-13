@@ -32,11 +32,7 @@ from pyspark.sql import functions as F
 from ubunye.core.interfaces import Task
 from ubunye.models.registry import ModelRegistry, ModelStage
 
-from taxi_fare_model import (  # noqa: E402 — after the sys.path shim above
-    FEATURES,
-    TaxiFareModel,
-    engineer_features,
-)
+from taxi_fare_model import FEATURES, TaxiFareModel  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -50,8 +46,10 @@ class TaxiFareBatchInference(Task):
         new_trips = sources["new_trips"]
 
         model, version = self._load_production_model()
-        # The exact same derivation the model was fitted on — one function, not two.
-        features = engineer_features(new_trips).select(*FEATURES, "fare_amount")
+        # Already engineered by the feature task, and already labelled `score`.
+        # Re-deriving them here is how a scoring task drifts from the model it is
+        # scoring with.
+        features = new_trips.select(*FEATURES, "fare_amount")
 
         # Score on the driver: this is a batch of tens of thousands of rows and a
         # scikit-learn model. Distributing it would mean shipping the model to
