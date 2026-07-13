@@ -41,6 +41,7 @@ jobs:
           ubunye validate -d examples/06_finetune_llm/pipelines        -u reviews   -p nlp       --all -dt 2026-07-13
           ubunye validate -d examples/07_data_quality/pipelines        -u quality   -p contracts --all -dt 2026-07-13
           ubunye validate -d examples/08_model_monitoring/pipelines    -u taxi_fare -p mlops     --all -dt 2026-07-13
+          ubunye validate -d examples/09_jdbc_ingest/pipelines         -u rnacentral -p ingestion --all -dt 2026-07-13
 
       - name: Every task file must parse
         # A mangled f-string does not fail `ubunye validate` — it fails on the

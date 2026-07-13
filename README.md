@@ -8,10 +8,14 @@ no cloud storage to configure.
 They install the engine from PyPI (`ubunye-engine==0.3.0`), so what you run here is
 what you get from `pip install` — not some unreleased branch.
 
-**Every example in this repo has been run on real Databricks.** Not validated,
-not reviewed — run, with the output inspected. Three of the bugs that fixing
-found are described in the commit history, because none of them could have been
-caught by reading the code.
+**Examples 01–08 have been run on real Databricks.** Not validated, not reviewed — run,
+with the output inspected. Several of the bugs that found are described in the commit
+history, because not one of them could have been caught by reading the code.
+
+**Example 09 has not**, and it says so at the top of its own README. It needs a classic
+cluster, which a free workspace does not have — so it was run against its real database
+on local Spark instead, and the part that remains unverified is named rather than
+glossed over.
 
 ---
 
@@ -50,6 +54,20 @@ task. They differ in what `transformations.py` says, not in shape.
 | **06** | [Fine-tuning an open LLM](examples/06_finetune_llm) | `samples.bakehouse` reviews | An LLM labels the data, a small DistilBERT **learns from it** and is gated on `recall_negative` — distillation, end to end |
 | **07** | [Data quality — a contract, enforced](examples/07_data_quality) | `samples.bakehouse` | Rules with severities; bad rows **quarantined, not dropped**; the run fails when the breach is structural |
 | **08** | [Model monitoring & rollback](examples/08_model_monitoring) | the model and features from 04 | Drift, decay, and champion-vs-challengers — and **why a rollback is the right answer to only one of them** |
+
+**Needs a paid workspace**
+
+| | Example | Reads | Shows |
+|---|---|---|---|
+| **09** | [JDBC — a real database](examples/09_jdbc_ingest) ⚠️ | RNAcentral's public Postgres (54M rows) | Why a JDBC read is **single-threaded unless you tell it not to be**, and how to slice it across connections |
+
+Example 09 is the **only one that has not been run on Databricks**, and the only one a
+free workspace cannot run at all: JDBC needs a driver JAR, and serverless ships none
+and cannot install one. It has its own bundle with a classic cluster. Its config,
+reader, pushed-down SQL, partitioned read and transformation *were* run end-to-end
+against the live database on local Spark — 56 databases, 200,000 rows, 4 partitions —
+but the notebook has never executed on a Databricks classic cluster, and its README
+says so rather than letting you assume otherwise.
 
 ### The ML example is two tasks, not five
 

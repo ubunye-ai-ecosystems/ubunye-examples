@@ -1,0 +1,102 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Ingest from a real relational database over JDBC.
+#
+# The database is RNAcentral's public PostgreSQL mirror, run by the EMBL-EBI. It is
+# genuinely public and genuinely read-only — the credentials below are published in
+# their documentation for anyone to use, which is why they are in this file instead
+# of in a secret. It holds 54 million RNA sequences, so it is also big enough for
+# the one JDBC lesson that actually matters:
+#
+#   *** A JDBC read is single-threaded unless you tell it not to be. ***
+#
+# Spark issues ONE query on ONE connection and one core drags the whole table
+# through it, no matter how big your cluster is. It does not warn you. It just
+# takes all afternoon, and the Spark UI shows one task at 100% while the rest of
+# the cluster sits idle.
+#
+# `partitionColumn` + `lowerBound` + `upperBound` + `numPartitions` is the fix:
+# Spark rewrites the read as N queries with a WHERE range each, and runs them in
+# parallel. Those bounds are NOT a filter — rows outside them are still read (the
+# first and last partitions are unbounded). They are a hint about how to slice.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    # A small dimension table, read whole. No partitioning needed — it is ~50 rows,
+    # and slicing it into 4 parallel queries would cost more than it saves.
+    databases:
+      format: jdbc
+      url: "jdbc:postgresql://{{ env.PG_HOST | default('hh-pgsql-public.ebi.ac.uk') }}:5432/{{ env.PG_DATABASE | default('pfmegrnargs') }}"
+      driver: "org.postgresql.Driver"
+      user: "{{ env.PG_USER | default('reader') }}"
+      password: "{{ env.PG_PASSWORD | default('NWDMCE5xdipIjRrp') }}"
+      table: "rnacen.rnc_database"
+
+    # 54 million rows. This is the read that teaches the lesson.
+    #
+    # `sql:` is pushed down to Postgres — the projection and the WHERE run in the
+    # database, not in Spark. Pulling 54M rows across the wire to then filter them
+    # in Spark is the second-most common JDBC mistake, and it is the one that makes
+    # people conclude "JDBC is slow" when what is slow is asking for everything.
+    #
+    # The slice is bounded on purpose: this is somebody else's research database and
+    # we are guests on it. 200k rows is enough to prove the mechanism.
+    sequences:
+      format: jdbc
+      url: "jdbc:postgresql://{{ env.PG_HOST | default('hh-pgsql-public.ebi.ac.uk') }}:5432/{{ env.PG_DATABASE | default('pfmegrnargs') }}"
+      driver: "org.postgresql.Driver"
+      user: "{{ env.PG_USER | default('reader') }}"
+      password: "{{ env.PG_PASSWORD | default('NWDMCE5xdipIjRrp') }}"
+      sql: |
+        SELECT id, upi, len, md5
+        FROM rnacen.rna
+        WHERE id <= 200000
+
+      # Four connections instead of one. Spark turns this into four queries:
+      #   ... WHERE id < 50001            (unbounded below)
+      #   ... WHERE id >= 50001 AND id < 100001
+      #   ... WHERE id >= 100001 AND id < 150001
+      #   ... WHERE id >= 150001          (unbounded above)
+      partitionColumn: "id"
+      lowerBound: 1
+      upperBound: 200000
+      numPartitions: 4
+
+      # How many rows the driver pulls per network round-trip. The Postgres JDBC
+      # default is to fetch the ENTIRE result set into the driver's memory before
+      # returning a single row — which is how a "slow query" turns into an OOM.
+      fetchsize: 10000
+
+  transform: {}
+
+  outputs:
+    rna_databases:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rna_databases"
+      mode: merge
+      merge_keys: ["id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "The databases that contribute sequences to RNAcentral (JDBC, table read)."
+
+    rna_sequence_profile:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rna_sequence_profile"
+      mode: overwrite
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Sequence-length profile of the ingested slice (JDBC, partitioned read)."

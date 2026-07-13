@@ -1,0 +1,98 @@
+# A SEPARATE bundle, on purpose.
+#
+# Every other example in this repo is serverless, and the root databricks.yml has no
+# `new_cluster` block anywhere in it — because a free workspace has no other kind of
+# compute. This example is the exception: JDBC needs a driver JAR, serverless ships
+# none and cannot install one, so it needs a CLASSIC cluster.
+#
+# Keeping it in its own bundle means the root bundle still deploys cleanly to a
+# workspace that has no classic compute. This is not a precaution, it is measured: on a
+# serverless-only workspace, deploying this bundle fails at job-CREATION time —
+#
+#     Error: cannot create resources.jobs.jdbc_ingest:
+#            Only serverless compute is supported in the workspace. (400)
+#
+# — so folding this job into the root bundle would break `bundle deploy` outright and
+# take the other eight examples down with it, on exactly the free workspaces this repo
+# is written for.
+#
+# Deploy from THIS directory:
+#     cd examples/09_jdbc_ingest
+#     databricks bundle deploy --target dev
+#     databricks bundle run jdbc_ingest --target dev
+
+bundle:
+  name: ubunye-examples-jdbc
+
+variables:
+  catalog:
+    description: Unity Catalog catalog to write to.
+    default: workspace
+  schema:
+    description: Schema to write to.
+    default: ubunye_examples
+  data_timestamp:
+    description: The {{ dt }} passed to the task.
+    default: "2026-07-13"
+  node_type_id:
+    description: >-
+      Cluster node type. This is cloud-specific — the default is an AWS type.
+      On Azure try Standard_DS3_v2; on GCP, n2-standard-4.
+    default: i3.xlarge
+  spark_version:
+    description: Databricks Runtime. Must be a classic (non-serverless) DBR.
+    default: 15.4.x-scala2.12
+
+resources:
+  jobs:
+    jdbc_ingest:
+      name: "[ubunye] 09 · JDBC ingestion — RNAcentral (classic cluster)"
+      max_concurrent_runs: 1
+
+      job_clusters:
+        - job_cluster_key: jdbc_cluster
+          new_cluster:
+            spark_version: ${var.spark_version}
+            node_type_id: ${var.node_type_id}
+            # Single node. The example pulls a bounded 200k-row slice; paying for
+            # workers to sit idle would be teaching the wrong habit along with the
+            # right one.
+            num_workers: 0
+            spark_conf:
+              spark.master: "local[*]"
+              spark.databricks.cluster.profile: singleNode
+            custom_tags:
+              ResourceClass: SingleNode
+            data_security_mode: SINGLE_USER
+
+      tasks:
+        - task_key: ingest_rna
+          job_cluster_key: jdbc_cluster
+
+          # The driver, fetched from Maven Central at cluster start. This is the line
+          # that cannot exist on serverless — and without it the job fails with a
+          # ClassNotFoundException from inside a Spark task, which reads like a Spark
+          # bug and is not one. The notebook checks for the class before it runs.
+          libraries:
+            - maven:
+                coordinates: org.postgresql:postgresql:42.7.4
+
+          notebook_task:
+            notebook_path: ./notebooks/run_ingest_rna.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/pipelines/rnacentral/ingestion/ingest_rna
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  ci:
+    mode: production
+    # Not wired into .github/workflows/deploy.yml. The CI workspace is serverless-only,
+    # so this bundle cannot run there — and a CI job that is permanently red teaches
+    # everyone to ignore red.

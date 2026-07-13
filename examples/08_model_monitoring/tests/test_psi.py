@@ -12,7 +12,7 @@ it goes wrong. The numbers are the ones measured on the real workspace data
 
 from __future__ import annotations
 
-import sys
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -20,19 +20,31 @@ import pandas as pd
 import pytest
 
 TASK = Path(__file__).resolve().parents[1] / "pipelines/taxi_fare/mlops/monitor_model"
-sys.path.insert(0, str(TASK))
 
 pytest.importorskip("pyspark", reason="the task module imports pyspark types")
 
-from transformations import (  # noqa: E402
-    BUCKETS,
-    MAX_ERROR_MULTIPLE,
-    MIN_IMPROVEMENT,
-    PSI_BREACH,
-    PSI_WARN,
-    _best,
-    _psi,
+# Loaded by PATH, under a unique name — not by `sys.path.insert` + `import
+# transformations`.
+#
+# Every example in this repo has a file called `transformations.py`. Under a single
+# pytest process the first one imported wins the name `transformations` in
+# sys.modules, and every later test silently gets THAT module instead of its own.
+# Which one wins depends on collection order, so the failure moves around when you
+# add an example. (It is the same trap the engine's task runner evicts sys.modules
+# to avoid.)
+_spec = importlib.util.spec_from_file_location(
+    "monitor_model_transformations", TASK / "transformations.py"
 )
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+
+BUCKETS = _mod.BUCKETS
+MAX_ERROR_MULTIPLE = _mod.MAX_ERROR_MULTIPLE
+MIN_IMPROVEMENT = _mod.MIN_IMPROVEMENT
+PSI_BREACH = _mod.PSI_BREACH
+PSI_WARN = _mod.PSI_WARN
+_best = _mod._best
+_psi = _mod._psi
 
 
 def edges_from(reference: pd.Series) -> np.ndarray:
