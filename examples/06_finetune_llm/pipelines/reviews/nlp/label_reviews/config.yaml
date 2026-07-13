@@ -1,0 +1,37 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# Distillation, part 1: let a big open-source LLM label the data.
+#
+# You have 204 customer reviews and no labels. Hand-labelling them is a week of
+# somebody's life; calling a 70B model for every review forever is a bill that
+# never stops. So do it once: have the large model label the corpus, then train a
+# small model you own on those labels (part 2).
+#
+# The teacher is `databricks-meta-llama-3-1-8b-instruct` — open source, served in
+# the workspace, no GPU and no egress needed.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    reviews:
+      format: unity
+      table: samples.bakehouse.media_customer_reviews
+
+  transform: {}
+
+  outputs:
+    # `merge` on review_id: labelling costs an LLM call per review, so a re-run
+    # must not re-label what is already labelled.
+    labelled_reviews:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.labelled_reviews"
+      mode: merge
+      merge_keys: ["review_id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Customer reviews labelled by an open-source LLM (the teacher)."

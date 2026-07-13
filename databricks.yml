@@ -146,6 +146,32 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    finetune_llm:
+      name: "[ubunye] 06 · Distillation — an LLM labels, a small model learns"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: label_reviews
+          notebook_task:
+            notebook_path: ./examples/06_finetune_llm/notebooks/run_label_reviews.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/06_finetune_llm/pipelines/reviews/nlp/label_reviews
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        - task_key: finetune_classifier
+          depends_on:
+            - task_key: label_reviews
+          notebook_task:
+            notebook_path: ./examples/06_finetune_llm/notebooks/run_finetune_classifier.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/06_finetune_llm/pipelines/reviews/nlp/finetune_classifier
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job
   # names and pauses schedules, so you cannot accidentally trample a real one.

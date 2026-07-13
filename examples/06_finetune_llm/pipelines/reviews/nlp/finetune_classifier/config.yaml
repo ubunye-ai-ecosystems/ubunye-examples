@@ -1,0 +1,34 @@
+MODEL: "ml"
+VERSION: "1.0.0"
+
+# Distillation, part 2: fine-tune a small open-source model on the teacher's labels.
+#
+# DistilBERT is 66M parameters and fine-tunes on CPU in minutes. The 8B teacher
+# would need a GPU to fine-tune and a GPU to serve — this student runs anywhere,
+# costs nothing per call, and you own the weights.
+#
+# The lifecycle is the same as any other model in this repo, because it IS the same:
+# split, fit, judge on data it never saw, gate, register, promote. That a
+# transformer is doing the fitting changes nothing about how it must be governed.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    labelled:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.labelled_reviews"
+
+  transform: {}
+
+  outputs:
+    student_metrics:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.student_model_metrics"
+      mode: append
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "How well the distilled student reproduces the teacher, on held-out reviews."
