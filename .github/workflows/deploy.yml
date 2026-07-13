@@ -55,18 +55,30 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         run: databricks bundle deploy --target ci
 
-      - name: Run — 01 · ingest structured
+      - name: Run — 01 · ingest structured (tables + SQL)
         if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
         run: databricks bundle run ingest_tables_sql --target ci
 
-      - name: Run — 03 · ingest unstructured
+      - name: Run — 02 · ingest structured (REST API)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        run: databricks bundle run ingest_rest_api --target ci
+
+      - name: Run — 03 · ingest unstructured (text + files)
         if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
         run: databricks bundle run ingest_unstructured --target ci
 
-      - name: Run — 04 · ML (engineering, then inference)
+      - name: Run — 04 · ML (features -> training -> inference)
         if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
-        # Two tasks with a dependency: if the model fails its quality gate,
+        # Three tasks with real dependencies: if the model fails its quality gate,
         # nothing is registered, inference has nothing to load, and this fails.
-        # That is correct — a pipeline that scores with an unvetted model is worse
-        # than one that stops.
+        # That is correct. Scoring with an unvetted model is worse than not scoring.
         run: databricks bundle run ml_taxi_fare --target ci
+
+      - name: Run — 05 · RAG (embed -> retrieve -> answer)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        run: databricks bundle run rag_documents --target ci
+
+      - name: Run — 06 · distillation (LLM labels -> DistilBERT learns)
+        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        # The slowest job by far: fine-tuning on CPU takes about ten minutes.
+        run: databricks bundle run finetune_llm --target ci
