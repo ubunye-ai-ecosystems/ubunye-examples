@@ -1,0 +1,48 @@
+# RAG on Kubernetes, with open-source models baked into the image.
+#
+# The first version of this told the pod to "run example 05" and nothing else. Example
+# 05 reads the chunks example 03 produces, and a fresh pod has an empty volume — so it
+# had nothing to read, failed, and the job sat there until it timed out. The bootstrap
+# travels with the pipeline; it does not appear by magic because the platform is fancy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ubunye-rag
+spec:
+  backoffLimit: 0 # a retry would hide a flake, and a flake is a finding
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ubunye
+          image: ubunye-ml:ci
+          imagePullPolicy: Never # side-loaded into kind
+          command: ["/app/platforms/models_demo.sh"]
+          env:
+            - name: SOURCE_CATALOG
+              value: spark_catalog
+            - name: UBUNYE_CATALOG
+              value: spark_catalog
+            - name: UBUNYE_SCHEMA
+              value: ubunye_examples
+            - name: UBUNYE_SINK
+              value: unity
+            - name: UBUNYE_CORPUS
+              value: file:///data/corpus
+            - name: MODEL_BACKEND
+              value: local # the whole point: no endpoint
+            - name: TORCH_THREADS
+              value: "2"
+            - name: DATA_DIR
+              value: /data
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            # A language model needs room. Under-request and the pod is OOMKilled
+            # halfway through generation, which reads like a crash and is a budget.
+            requests: { memory: "5Gi", cpu: "2" }
+            limits: { memory: "7Gi" }
+      volumes:
+        - name: data
+          emptyDir: {}
