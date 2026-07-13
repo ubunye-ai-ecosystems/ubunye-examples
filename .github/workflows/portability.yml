@@ -45,7 +45,6 @@ jobs:
         id: run
         run: |
           set -euo pipefail
-          chmod +x platforms/local/run.sh platforms/run_task.sh
           platforms/local/run.sh | tee out.txt
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
 
