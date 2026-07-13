@@ -1,0 +1,36 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# RAG, part 2: retrieve, then generate.
+#
+# The two halves of RAG are separate tasks for a reason. Embedding is expensive
+# and changes only when documents change. Answering is cheap and changes every
+# time somebody asks something. Bolting them together means re-embedding your
+# corpus to answer one new question.
+#
+# Generation uses `databricks-gpt-oss-20b` — an OPEN-SOURCE LLM served in the
+# workspace. Swap the endpoint name and the pipeline is unchanged.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    embeddings:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.chunk_embeddings"
+
+  transform: {}
+
+  outputs:
+    # Every answer is written down WITH the chunks that produced it. An answer you
+    # cannot trace back to its sources is not a retrieval system, it is a rumour.
+    rag_answers:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rag_answers"
+      mode: overwrite
+      file_format: delta
+      options:
+        overwriteSchema: "true"
+        comment: "Question, retrieved context, generated answer, and the sources it came from."

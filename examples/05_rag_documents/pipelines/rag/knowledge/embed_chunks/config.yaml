@@ -1,0 +1,45 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# RAG, part 1: turn text chunks into vectors.
+#
+# The chunks come from example 03 — the same document_chunks table, reused rather
+# than recomputed. That is the point of writing intermediate tables: the next use
+# case starts where the last one stopped.
+#
+# Embeddings come from `databricks-bge-large-en`, an OPEN-SOURCE model (BAAI's
+# BGE) already served in the workspace. No weights to download, no GPU, no egress
+# — which matters, because serverless blocks most of the internet.
+
+ENGINE:
+  spark_conf:
+    spark.sql.shuffle.partitions: "4"
+  profiles:
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "4"
+
+CONFIG:
+  inputs:
+    chunks:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.document_chunks"
+
+  transform: {}
+
+  outputs:
+    # `merge` on chunk_id: embedding is the expensive step, so re-running must not
+    # re-embed the world. Chunks that already have a vector keep it; only new or
+    # changed chunks cost anything.
+    chunk_embeddings:
+      format: unity
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.chunk_embeddings"
+      mode: merge
+      merge_keys: ["chunk_id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+        comment: "Chunk text + its embedding vector (BGE-large, 1024-dim)."

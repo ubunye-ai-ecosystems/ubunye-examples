@@ -116,6 +116,36 @@ resources:
               dt: ${var.data_timestamp}
               mode: PROD
 
+    rag_documents:
+      name: "[ubunye] 05 · RAG — embed, then retrieve and answer"
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: embed_chunks
+          notebook_task:
+            notebook_path: ./examples/05_rag_documents/notebooks/run_embed_chunks.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/05_rag_documents/pipelines/rag/knowledge/embed_chunks
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
+        # Retrieval depends on embedding for the obvious reason, but the tasks are
+        # separate for a less obvious one: embedding is expensive and changes only
+        # when documents change; answering is cheap and changes every time somebody
+        # asks something. Fused, you would re-embed the corpus to answer one question.
+        - task_key: answer_questions
+          depends_on:
+            - task_key: embed_chunks
+          notebook_task:
+            notebook_path: ./examples/05_rag_documents/notebooks/run_answer_questions.py
+            base_parameters:
+              task_dir: ${workspace.file_path}/examples/05_rag_documents/pipelines/rag/knowledge/answer_questions
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              dt: ${var.data_timestamp}
+              mode: PROD
+
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job
   # names and pauses schedules, so you cannot accidentally trample a real one.
