@@ -111,33 +111,30 @@ jobs:
           . platforms/spark_env.sh
           python - <<'PY'
           from pyspark.sql import SparkSession
-          spark = (SparkSession.builder.appName("check")
-                   .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-                   .config("spark.sql.catalog.spark_catalog",
-                           "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-                   .config("spark.sql.warehouse.dir", "/tmp/ubunye/warehouse")
-                   .config("javax.jdo.option.ConnectionURL",
-                           "jdbc:derby:;databaseName=/tmp/ubunye/metastore_db;create=true")
-                   .enableHiveSupport()
-                   .getOrCreate())
+          spark = (SparkSession.builder.appName("check").enableHiveSupport().getOrCreate())
           spark.sparkContext.setLogLevel("ERROR")
+
+          # Delta paths — examples 02, 09 and 11 wrote by path.
           for t in ["hourly_forecast", "rna_databases", "rna_sequence_profile"]:
               n = spark.read.format("delta").load(f"/tmp/ubunye/{t}").count()
-              print(f"  path  {t:<26} {n} rows")
+              print(f"  path   {t:<28} {n:>7} rows")
               assert n > 0, f"{t} is empty"
 
-          # And the examples that ran with format: unity against a plain Hive
-          # metastore — the same configs Databricks runs, unchanged.
-          # NOT `USE CATALOG spark_catalog` — that is a Unity Catalog statement, and
-          # open-source Spark rejects it with PARSE_SYNTAX_ERROR. spark_catalog is the
-          # default session catalog anyway, so a two-part name is all that is needed.
-          # (The engine has the same latent bug: core/catalog.py issues USE CATALOG,
-          # which cannot work off Unity Catalog.)
-          for t in ["franchise_revenue", "clean_transactions", "quarantined_transactions",
-                    "contract_results", "taxi_features", "taxi_model_metrics",
-                    "taxi_fare_predictions"]:
+          # Metastore tables — examples 01, 07 and 04 wrote with `format: unity`,
+          # unchanged, against a plain Hive metastore.
+          print()
+          print("  databases:", [r.namespace for r in spark.sql("SHOW DATABASES").collect()])
+          for db in ["ubunye_examples", "bakehouse", "nyctaxi"]:
+              tabs = [r.tableName for r in spark.sql(f"SHOW TABLES IN {db}").collect()]
+              print(f"  {db}: {sorted(tabs)}")
+
+          print()
+          expected = ["franchise_revenue", "product_revenue",          # 01
+                      "clean_transactions", "quarantined_transactions", "contract_results",  # 07
+                      "taxi_features", "taxi_model_metrics", "taxi_fare_predictions"]        # 04
+          for t in expected:
               n = spark.table(f"ubunye_examples.{t}").count()
-              print(f"  table {t:<26} {n} rows")
+              print(f"  table  {t:<28} {n:>7} rows")
               assert n > 0, f"{t} is empty"
           PY
 
