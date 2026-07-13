@@ -83,8 +83,9 @@ CONFIG:
 
   outputs:
     rna_databases:
-      format: unity
+      format: "{{ env.UBUNYE_SINK | default('unity') }}"
       table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rna_databases"
+      path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/rna_databases"
       mode: merge
       merge_keys: ["id"]
       file_format: delta
@@ -93,8 +94,9 @@ CONFIG:
         comment: "The databases that contribute sequences to RNAcentral (JDBC, table read)."
 
     rna_sequence_profile:
-      format: unity
+      format: "{{ env.UBUNYE_SINK | default('unity') }}"
       table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rna_sequence_profile"
+      path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/rna_sequence_profile"
       mode: overwrite
       file_format: delta
       options:

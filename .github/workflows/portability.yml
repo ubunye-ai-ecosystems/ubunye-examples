@@ -38,9 +38,37 @@ jobs:
         id: run
         run: |
           set -euo pipefail
-          chmod +x platforms/local/run.sh
+          chmod +x platforms/local/run.sh platforms/run_task.sh
           platforms/local/run.sh | tee out.txt
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: 02 · REST ingestion — off Databricks
+        # Proves the rest_api connector works with no Databricks anywhere. It also
+        # proves the packaging bug is real: `requests` is only in the engine's `dev`
+        # extra, so this fails unless it is installed explicitly. On Databricks it
+        # works by accident, because DBR preinstalls it.
+        run: platforms/run_task.sh examples/02_ingest_rest_api weather ingestion hourly_forecast
+
+      - name: 09 · JDBC — the example Databricks serverless CANNOT run
+        # Serverless ships no JDBC drivers and cannot install a JAR. On open-source
+        # Spark it is one Maven coordinate. The "restricted" platform is the managed one.
+        run: platforms/run_task.sh examples/09_jdbc_ingest rnacentral ingestion ingest_rna
+
+      - name: What actually landed on disk
+        run: |
+          python - <<'PY'
+          from pyspark.sql import SparkSession
+          spark = (SparkSession.builder.appName("check")
+                   .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+                   .config("spark.sql.catalog.spark_catalog",
+                           "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+                   .getOrCreate())
+          spark.sparkContext.setLogLevel("ERROR")
+          for t in ["hourly_forecast", "rna_databases", "rna_sequence_profile"]:
+              n = spark.read.format("delta").load(f"/tmp/ubunye/{t}").count()
+              print(f"  {t:<24} {n} rows")
+              assert n > 0, f"{t} is empty"
+          PY
 
   docker:
     name: Docker container
@@ -59,6 +87,12 @@ jobs:
           set -euo pipefail
           docker run --rm ubunye-portable:ci | tee out.txt
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: 02 · REST ingestion, in the container
+        run: docker run --rm ubunye-portable:ci examples/02_ingest_rest_api weather ingestion hourly_forecast
+
+      - name: 09 · JDBC, in the container
+        run: docker run --rm ubunye-portable:ci examples/09_jdbc_ingest rnacentral ingestion ingest_rna
 
   kubernetes:
     name: Kubernetes (kind)

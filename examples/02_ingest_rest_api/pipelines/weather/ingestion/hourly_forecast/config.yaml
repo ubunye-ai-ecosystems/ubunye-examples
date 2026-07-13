@@ -64,8 +64,9 @@ CONFIG:
     # everything; merge corrects the hours that were re-forecast and inserts the
     # genuinely new ones. That is what makes the task safe to run on a schedule.
     hourly_forecast:
-      format: unity
+      format: "{{ env.UBUNYE_SINK | default('unity') }}"
       table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.hourly_forecast"
+      path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/hourly_forecast"
       mode: merge
       merge_keys: ["city", "observed_at"]
       file_format: delta
