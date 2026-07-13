@@ -128,7 +128,11 @@ jobs:
 
           # And the examples that ran with format: unity against a plain Hive
           # metastore — the same configs Databricks runs, unchanged.
-          spark.sql("USE CATALOG spark_catalog")
+          # NOT `USE CATALOG spark_catalog` — that is a Unity Catalog statement, and
+          # open-source Spark rejects it with PARSE_SYNTAX_ERROR. spark_catalog is the
+          # default session catalog anyway, so a two-part name is all that is needed.
+          # (The engine has the same latent bug: core/catalog.py issues USE CATALOG,
+          # which cannot work off Unity Catalog.)
           for t in ["franchise_revenue", "clean_transactions", "quarantined_transactions",
                     "contract_results", "taxi_features", "taxi_model_metrics",
                     "taxi_fare_predictions"]:
