@@ -1,0 +1,7 @@
+Idempotency Is Not Optional
+
+Every pipeline is retried eventually. The cluster dies, the upstream is late, someone reruns yesterday to fix a bug. The only question is whether the retry corrects the data or corrupts it.
+
+An append-only job that is retried duplicates every row it already wrote. This is the most common data quality bug in the world, and it is invisible: no error, no alert, just counts that quietly drift. The fix is not vigilance. The fix is to make the write idempotent — a MERGE on a key, or an overwrite scoped to the partition being rebuilt — so that running the job twice produces the same table as running it once.
+
+The test is simple and almost nobody runs it: execute the pipeline twice on the same input and diff the output. If the two differ, you do not have a pipeline. You have a pipeline-shaped thing that happens to have worked so far.

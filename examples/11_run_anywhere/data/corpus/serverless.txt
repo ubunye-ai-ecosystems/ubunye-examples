@@ -1,0 +1,9 @@
+What Serverless Takes Away
+
+Serverless compute removes the cluster, and with it a set of habits that quietly stopped working.
+
+The local filesystem is the first casualty. Writing to /tmp on the driver was always a shortcut; on serverless the executors cannot see it, and the code fails in a way that reads like a permissions bug. Volumes replace it: a real path, visible to every executor, backed by object storage.
+
+The second is the assumption of network access. A notebook that pip-installs from an internal mirror, or calls an internal API, is making a request that the platform may simply refuse. This is not a bug to be worked around but a boundary to be designed for: pin what you need, vendor what you can, and treat egress as a privilege rather than a property of being connected to a network.
+
+What is gained is worth the trouble. No cluster to size, none to forget to terminate, and a bill that reflects work done rather than time spent waiting for a machine that was idling.

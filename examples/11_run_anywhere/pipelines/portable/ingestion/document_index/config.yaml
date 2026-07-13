@@ -1,0 +1,96 @@
+MODEL: "etl"
+VERSION: "1.0.0"
+
+# ONE config. Six platforms. Zero edits.
+#
+# Local Spark, Docker, Kubernetes, YARN, AWS EMR, GCP Dataproc, Databricks — this
+# file is the same bytes on every one of them. Nothing is commented out, nothing is
+# branched, nothing is generated. What changes is the *environment*, and only three
+# things in it:
+#
+#     SPARK_MASTER       where the compute is        local[*] | k8s://... | yarn
+#     UBUNYE_SINK        what kind of table to write s3 | unity | delta | hive
+#     UBUNYE_DATA_ROOT   where the data lives        file:// | s3a:// | gs:// | /Volumes/...
+#
+# That is the entire portability surface, and each of the three is a plain Jinja
+# value. There is no `{% if platform == ... %}` here, and there cannot be: the
+# engine parses this YAML *first* and only then renders the string values, so
+# structural conditionals are impossible. That constraint is a gift — it forces the
+# config to stay one config instead of quietly becoming three.
+#
+# WHY `path` AND `table` ARE BOTH SET
+#
+# They are not alternatives to choose between; they are both always here, and the
+# connector picks the one it needs. The `s3` writer reads `path` and never looks at
+# `table`. The `unity` writer reads `table` and never looks at `path`. Config
+# validation only enforces the keys the *resolved* format requires. So one output
+# block satisfies both, and `UBUNYE_SINK` decides which is real.
+
+ENGINE:
+  spark_conf:
+    # The one line that moves the job between a laptop, a cluster and a cloud.
+    #   local[*]                      a laptop, a CI runner, a Docker container
+    #   k8s://https://<api-server>    Kubernetes
+    #   yarn                          Hadoop / EMR on EC2
+    # On Databricks it is ignored — the platform owns the session, and the engine
+    # attaches to the one that already exists rather than building its own.
+    spark.master: "{{ env.SPARK_MASTER | default('local[*]') }}"
+    spark.sql.shuffle.partitions: "2"
+
+    # Delta on open-source Spark needs to be switched on. Databricks ships it
+    # already active, where these two lines are a harmless no-op.
+    spark.sql.extensions: "io.delta.sql.DeltaSparkSessionExtension"
+    spark.sql.catalog.spark_catalog: "org.apache.spark.sql.delta.catalog.DeltaCatalog"
+
+  profiles:
+    # Both modes must exist. `merged_spark_conf` RAISES when the requested mode has
+    # no matching profile and other profiles do exist — so a config with only PROD
+    # hard-fails under the default `-m DEV`.
+    DEV:
+      spark_conf:
+        spark.sql.shuffle.partitions: "1"
+    PROD:
+      spark_conf:
+        spark.sql.shuffle.partitions: "2"
+
+CONFIG:
+  inputs:
+    # Plain files on a filesystem — the most portable source there is. Spark's
+    # binaryFile reader takes any URI its Hadoop layer understands: file://,
+    # s3a://, gs://, abfss://, or a FUSE-mounted /Volumes path on Databricks.
+    #
+    # The corpus is committed to this repo. Nothing is downloaded, so the example
+    # needs no egress and behaves identically on a locked-down cluster and a
+    # laptop on a train.
+    files:
+      format: binary
+      path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/corpus"
+      path_glob_filter: "*.txt"
+      recursive: true
+
+  transform: {}
+
+  outputs:
+    documents:
+      # s3 is the DEFAULT, not unity — because the default has to be the one that
+      # works for someone who has never heard of Databricks. And despite the name,
+      # the `s3` connector is a generic path connector: file://, s3a://, gs://,
+      # abfss://. It is the portable workhorse of this repo.
+      format: "{{ env.UBUNYE_SINK | default('s3') }}"
+      path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/documents"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.portable_documents"
+      mode: merge
+      merge_keys: ["doc_id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
+
+    document_chunks:
+      format: "{{ env.UBUNYE_SINK | default('s3') }}"
+      path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/document_chunks"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.portable_document_chunks"
+      mode: merge
+      merge_keys: ["chunk_id"]
+      file_format: delta
+      options:
+        mergeSchema: "true"
