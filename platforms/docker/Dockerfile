@@ -33,7 +33,7 @@ ARG UBUNYE_VERSION=0.3.0
 RUN pip install --no-cache-dir \
       "pyspark==${PYSPARK_VERSION}" \
       "delta-spark==${DELTA_VERSION}" \
-      "ubunye-engine[spark]==${UBUNYE_VERSION}" \
+      "ubunye-engine[spark,ml]==${UBUNYE_VERSION}" \
       "requests>=2.28"
 
 # Delta and the JDBC driver are JVM artifacts, and pip does not install JARs. The

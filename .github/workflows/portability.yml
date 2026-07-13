@@ -39,7 +39,7 @@ jobs:
         # a request. It works on Databricks purely because DBR preinstalls it. This
         # step failed with `No module named 'requests'` the first time example 02 ran
         # off Databricks — which is the only place the bug is visible.
-        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine==0.3.0" "requests>=2.28"
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark,ml]==0.3.0" "requests>=2.28"
 
       - name: Run the task
         id: run
@@ -61,6 +61,50 @@ jobs:
         # Spark it is one Maven coordinate. The "restricted" platform is the managed one.
         run: platforms/run_task.sh examples/09_jdbc_ingest rnacentral ingestion ingest_rna
 
+      - name: Seed the source tables — same schema as samples.*, different rows
+        # The examples read samples.nyctaxi / samples.bakehouse, which exist only
+        # inside a Databricks workspace. This creates tables with the SAME names,
+        # columns and types in a local Hive metastore, filled with data we generate.
+        #
+        # The data is not the point. The process is. The pipelines below do not change
+        # by a character — they resolve against a different catalog, and that is one
+        # environment variable.
+        env:
+          SOURCE_CATALOG: spark_catalog
+        run: |
+          set -euo pipefail
+          export PYSPARK_SUBMIT_ARGS="--packages io.delta:delta-spark_2.12:3.2.0             --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension             --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog             --conf spark.sql.catalogImplementation=hive             --conf spark.sql.warehouse.dir=/tmp/ubunye/warehouse             --conf javax.jdo.option.ConnectionURL=jdbc:derby:;databaseName=/tmp/ubunye/metastore_db;create=true             pyspark-shell"
+          python platforms/seed.py
+
+      - name: 01 · tables + SQL pushdown — off Databricks
+        # `format: unity` is only ever spark.table() and spark.sql(), so it works
+        # against a plain Hive metastore. The SQL join is pushed down exactly as it is
+        # on Databricks. The config is untouched.
+        env: &offdbx
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+        run: platforms/run_task.sh examples/01_ingest_tables_sql retail ingestion customer_revenue
+
+      - name: 07 · data quality — the contract, enforced off Databricks
+        # Same rules, same severities, same quarantine. Different rows.
+        env: *offdbx
+        run: platforms/run_task.sh examples/07_data_quality quality contracts validate_transactions
+
+      - name: 04 · the full ML lifecycle — off Databricks
+        # features -> train -> gate -> register -> promote -> score, on open-source
+        # Spark with a local model registry. The registry is pathlib-based, so a plain
+        # directory is all it needs.
+        env:
+          SOURCE_CATALOG: spark_catalog
+          UBUNYE_CATALOG: spark_catalog
+          UBUNYE_SCHEMA: ubunye_examples
+          UBUNYE_SINK: unity
+          TAXI_MODEL_STORE: /tmp/ubunye/model_store
+        run: |
+          platforms/run_task.sh examples/04_ml_taxi_fare taxi_fare ml             feature_engineering model_training batch_inference
+
       - name: What actually landed on disk
         run: |
           python - <<'PY'
@@ -69,11 +113,25 @@ jobs:
                    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
                    .config("spark.sql.catalog.spark_catalog",
                            "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+                   .config("spark.sql.warehouse.dir", "/tmp/ubunye/warehouse")
+                   .config("javax.jdo.option.ConnectionURL",
+                           "jdbc:derby:;databaseName=/tmp/ubunye/metastore_db;create=true")
+                   .enableHiveSupport()
                    .getOrCreate())
           spark.sparkContext.setLogLevel("ERROR")
           for t in ["hourly_forecast", "rna_databases", "rna_sequence_profile"]:
               n = spark.read.format("delta").load(f"/tmp/ubunye/{t}").count()
-              print(f"  {t:<24} {n} rows")
+              print(f"  path  {t:<26} {n} rows")
+              assert n > 0, f"{t} is empty"
+
+          # And the examples that ran with format: unity against a plain Hive
+          # metastore — the same configs Databricks runs, unchanged.
+          spark.sql("USE CATALOG spark_catalog")
+          for t in ["franchise_revenue", "clean_transactions", "quarantined_transactions",
+                    "contract_results", "taxi_features", "taxi_model_metrics",
+                    "taxi_fare_predictions"]:
+              n = spark.table(f"ubunye_examples.{t}").count()
+              print(f"  table {t:<26} {n} rows")
               assert n > 0, f"{t} is empty"
           PY
 
