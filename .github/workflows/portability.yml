@@ -442,6 +442,62 @@ jobs:
         if: steps.creds.outputs.ok == 'true'
         run: platforms/gcp/submit.sh
 
+  models-in-a-container:
+    name: RAG + distillation in Docker and Kubernetes (open models)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the base image
+        run: docker build -f platforms/docker/Dockerfile -t ubunye-portable:ci .
+
+      - name: Build the model image — weights baked IN
+        # The weights are downloaded at BUILD time, then HF_HUB_OFFLINE=1 forbids the
+        # network. A container that fetches a gigabyte on every start silently depends
+        # on the internet, which a locked-down cluster or a VPC-isolated cloud job does
+        # not have -- and that failure arrives after you have paid to start the job.
+        #
+        # This is the SAME artifact EMR Serverless and Dataproc Serverless take as a
+        # custom container image. One image, four platforms; only the registry differs.
+        run: |
+          docker build -f platforms/docker/Dockerfile.ml             --build-arg BASE=ubunye-portable:ci -t ubunye-ml:ci .
+          docker images ubunye-ml:ci --format "  image size: {{.Size}}"
+
+      - name: Seed + 03 + 05 + 06, in the container
+        # Everything in one container run: the metastore has to survive between tasks,
+        # and a fresh container per task would throw it away.
+        run: |
+          docker run --rm --entrypoint bash             -e SOURCE_CATALOG=spark_catalog             -e UBUNYE_CATALOG=spark_catalog             -e UBUNYE_SCHEMA=ubunye_examples             -e UBUNYE_SINK=unity             -e UBUNYE_CORPUS=file:///data/corpus             -e MODEL_BACKEND=local             -e STUDENT_MODEL_STORE=/data/model_store             -e DATA_DIR=/data             ubunye-ml:ci -c '
+              set -euo pipefail
+              . /etc/java.env
+              mkdir -p /data/corpus
+              cp /app/examples/11_run_anywhere/data/corpus/*.txt /data/corpus/
+              cd /app
+              . platforms/spark_env.sh
+              python platforms/seed.py
+              platforms/run_task.sh examples/03_ingest_unstructured docs ingestion document_index
+              platforms/run_task.sh examples/05_rag_documents rag knowledge embed_chunks answer_questions
+              platforms/run_task.sh examples/06_finetune_llm reviews nlp label_reviews finetune_classifier
+              echo "RAG and distillation ran in a container, on open models, with no Databricks"
+            '
+
+      - name: Create a Kubernetes cluster
+        uses: helm/kind-action@v1
+        with: { cluster_name: ubunye-ml }
+
+      - name: Load the model image into the cluster
+        # A multi-GB image; kind has to side-load it because the nodes cannot see the
+        # host daemon. This is the slow step, and it is honest work -- a real cluster
+        # would pull it from a registry instead.
+        run: kind load docker-image ubunye-ml:ci --name ubunye-ml
+
+      - name: Run RAG on Kubernetes
+        run: |
+          set -euo pipefail
+          sed -e "s|{{NAME}}|rag|"               -e 's|{{ARGS}}|"examples/05_rag_documents", "rag", "knowledge", "embed_chunks", "answer_questions"|'               -e "s|ubunye-portable:ci|ubunye-ml:ci|"               platforms/k8s/job-template.yaml             | sed -e 's|memory: "3Gi"|memory: "6Gi"|' -e 's|memory: "2Gi"|memory: "4Gi"|'             | kubectl apply -f -
+          kubectl wait --for=condition=complete --timeout=25m job/ubunye-rag             || { kubectl logs job/ubunye-rag --tail=60; exit 1; }
+          kubectl logs job/ubunye-rag | tail -20
+
   identical:
     name: every platform produced the same output
     runs-on: ubuntu-latest
