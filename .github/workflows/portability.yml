@@ -45,7 +45,6 @@ jobs:
         id: run
         run: |
           set -euo pipefail
-          chmod +x platforms/local/run.sh platforms/run_task.sh
           platforms/local/run.sh | tee out.txt
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
 
@@ -193,10 +192,71 @@ jobs:
           kubectl logs job/ubunye-portable | tee out.txt
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
 
+  object-store:
+    name: object storage (s3a:// via MinIO)
+    runs-on: ubuntu-latest
+    outputs:
+      fingerprint: ${{ steps.run.outputs.fingerprint }}
+
+    env:
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: ubunye
+      S3_SECRET_KEY: ubunye-secret
+      AWS_ACCESS_KEY_ID: ubunye
+      AWS_SECRET_ACCESS_KEY: ubunye-secret
+      AWS_EC2_METADATA_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Install the released engine + Spark + Delta
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark]==0.3.0" "requests>=2.28"
+
+      - name: Start MinIO — a real S3-compatible server
+        # Started as a plain container, NOT a `services:` block. The official minio
+        # image needs a `server /data` command, and GitHub service containers cannot
+        # override a command. (The first version used bitnami/minio, which starts a
+        # server by default — and Bitnami has since withdrawn their public `latest`
+        # tags, so the pull failed with `manifest unknown`.)
+        #
+        # Not a mock and not a stub: the pipeline talks to this through Hadoop's actual
+        # S3A connector, the same one it would use against AWS.
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=ubunye             -e MINIO_ROOT_PASSWORD=ubunye-secret             minio/minio:latest server /data
+
+      - name: Wait for MinIO, and stage the corpus INTO the bucket
+        # The bootstrap is the platform's job. On Databricks a notebook copies the
+        # corpus to a volume; here we put it in an object store. The pipeline neither
+        # knows nor cares which.
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break || sleep 2
+          done
+          aws --endpoint-url http://localhost:9000 s3 mb s3://ubunye 2>/dev/null || true
+          aws --endpoint-url http://localhost:9000 s3 cp             examples/11_run_anywhere/data/corpus/ s3://ubunye/corpus/ --recursive
+          aws --endpoint-url http://localhost:9000 s3 ls s3://ubunye/corpus/
+
+      - name: Run the task against s3a:// -- the config is untouched
+        id: run
+        env:
+          UBUNYE_DATA_ROOT: s3a://ubunye
+          UBUNYE_SINK: s3
+        run: |
+          set -euo pipefail
+          . platforms/spark_env.sh
+          platforms/run_task.sh examples/11_run_anywhere portable ingestion document_index
+          python platforms/fingerprint.py s3a://ubunye/documents s3a://ubunye/document_chunks | tee out.txt
+          echo "fingerprint=$(grep -oP 'FINGERPRINT=.*' out.txt | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
   identical:
     name: every platform produced the same output
     runs-on: ubuntu-latest
-    needs: [local, docker, kubernetes]
+    needs: [local, docker, kubernetes, object-store]
     steps:
       - name: Compare the fingerprints
         run: |
@@ -204,17 +264,19 @@ jobs:
           LOCAL='${{ needs.local.outputs.fingerprint }}'
           DOCKER='${{ needs.docker.outputs.fingerprint }}'
           K8S='${{ needs.kubernetes.outputs.fingerprint }}'
+          S3A='${{ needs.object-store.outputs.fingerprint }}'
 
           printf '  %-22s %s\n' "local Spark:" "$LOCAL" "Docker:" "$DOCKER" "Kubernetes:" "$K8S"
 
           # An empty fingerprint means the run produced nothing and the grep found
           # nothing — which would otherwise sail through as "all three matched".
-          for f in "$LOCAL" "$DOCKER" "$K8S"; do
+          echo "  object store (s3a): $S3A"
+          for f in "$LOCAL" "$DOCKER" "$K8S" "$S3A"; do
             [ -n "$f" ] || { echo "::error::a platform produced NO fingerprint"; exit 1; }
           done
 
-          if [ "$LOCAL" = "$DOCKER" ] && [ "$LOCAL" = "$K8S" ]; then
-            echo "::notice::identical output on all three platforms — $LOCAL"
+          if [ "$LOCAL" = "$DOCKER" ] && [ "$LOCAL" = "$K8S" ] && [ "$LOCAL" = "$S3A" ]; then
+            echo "::notice::identical output on local, Docker, Kubernetes and s3a:// — $LOCAL"
           else
             echo "::error::the platforms disagree. Same config, same code, different data."
             exit 1

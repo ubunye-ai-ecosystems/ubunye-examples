@@ -38,10 +38,37 @@ esac
 
 # Adding a JDBC driver to open-source Spark is one Maven coordinate. It is Databricks
 # SERVERLESS that cannot do it — which is why example 09 runs here and not there.
-export PYSPARK_SUBMIT_ARGS="--packages ${DELTA_PKG},org.postgresql:postgresql:42.7.4 \
---conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+PACKAGES="${DELTA_PKG},org.postgresql:postgresql:42.7.4"
+CONF="--conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
 --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
 --conf spark.sql.catalogImplementation=hive \
 --conf spark.sql.warehouse.dir=${DATA}/warehouse \
---conf javax.jdo.option.ConnectionURL=jdbc:derby:;databaseName=${DATA}/metastore_db;create=true \
-pyspark-shell"
+--conf javax.jdo.option.ConnectionURL=jdbc:derby:;databaseName=${DATA}/metastore_db;create=true"
+
+# --- object storage (s3a://) ----------------------------------------------------
+# Set S3_ENDPOINT and the pipeline reads and writes an object store instead of a
+# local disk. Nothing in any config.yaml changes: UBUNYE_DATA_ROOT simply becomes an
+# s3a:// URI, and the `s3` connector — which was never AWS-specific, only badly named
+# — hands the path straight to Hadoop's filesystem layer.
+#
+# This is the SAME S3A connector AWS uses. Against MinIO the only differences are the
+# endpoint and path-style addressing; against real S3 you delete those two lines and
+# supply credentials. That is the whole of the "does it work on AWS storage" question,
+# and it can be answered for free.
+#
+# hadoop-aws must match the Hadoop that Spark was built against — 3.3.4 for Spark 3.5.
+# A mismatched pair fails at RUNTIME with NoSuchMethodError, never at install time.
+# Same trap as Delta, same fix: pin them together.
+if [ -n "${S3_ENDPOINT:-}" ]; then
+  PACKAGES="${PACKAGES},org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262"
+  CONF="${CONF} \
+--conf spark.hadoop.fs.s3a.endpoint=${S3_ENDPOINT} \
+--conf spark.hadoop.fs.s3a.access.key=${S3_ACCESS_KEY:-} \
+--conf spark.hadoop.fs.s3a.secret.key=${S3_SECRET_KEY:-} \
+--conf spark.hadoop.fs.s3a.path.style.access=true \
+--conf spark.hadoop.fs.s3a.connection.ssl.enabled=${S3_SSL:-false} \
+--conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+--conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+fi
+
+export PYSPARK_SUBMIT_ARGS="--packages ${PACKAGES} ${CONF} pyspark-shell"
