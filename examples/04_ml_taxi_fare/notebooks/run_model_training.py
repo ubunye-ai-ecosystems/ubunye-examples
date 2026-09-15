@@ -119,3 +119,36 @@ assert len(runs) > 0, "nothing was logged to MLflow"
 assert runs.iloc[0]["metrics.test_rmse"] is not None, "the run has no test metrics"
 
 print("OK")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Hand the numbers back out of the workspace
+# MAGIC
+# MAGIC A green tick says the job finished. It does not say what the model scored, and
+# MAGIC the numbers above live only in this notebook's output inside the workspace.
+# MAGIC
+# MAGIC `dbutils.notebook.exit` is the one channel a job task has back to whatever
+# MAGIC started it. `databricks bundle run` prints whatever comes out of it, so these
+# MAGIC numbers land in the CI log, where anyone can read them without a workspace
+# MAGIC login and without taking a screenshot that goes stale the next time it runs.
+
+# COMMAND ----------
+
+import json
+
+dbutils.notebook.exit(
+    json.dumps(
+        {
+            "example": "04_ml_taxi_fare",
+            "task": "model_training",
+            "production_version": version.version,
+            "test_rmse": version.metrics.get("test_rmse"),
+            "test_r2": version.metrics.get("test_r2"),
+            "train_rows": version.metrics.get("train_rows"),
+            "test_rows": version.metrics.get("test_rows"),
+            "mlflow_runs_logged": int(len(runs)),
+        },
+        default=str,
+    )
+)
