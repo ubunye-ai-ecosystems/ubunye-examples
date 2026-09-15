@@ -19,6 +19,19 @@ on:
         type: boolean
         default: true
 
+# NOTE ON THE `if:` GUARDS BELOW
+# Every run step is gated on `github.event_name != 'workflow_dispatch' || inputs.run_jobs`
+# and NOT on `inputs.run_jobs != false`, which is what it used to say and which was
+# wrong in the quietest possible way.
+#
+# `inputs` only exists for a manual dispatch. On a push it is empty, GitHub coerces
+# empty to false, so `inputs.run_jobs != false` evaluated to FALSE on every push and
+# all ten run steps skipped. The job still went green in 25 seconds, because deploying
+# a bundle succeeds whether or not the pipelines inside it work.
+#
+# That is the exact failure portability.yml exists to prevent, and it lived here for
+# two months: a green tick that meant "the upload worked", never "the examples ran".
+
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false # never kill a half-finished deploy
@@ -56,39 +69,39 @@ jobs:
         run: databricks bundle deploy --target ci
 
       - name: Run — 01 · ingest structured (tables + SQL)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         run: databricks bundle run ingest_tables_sql --target ci
 
       - name: Run — 02 · ingest structured (REST API)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         run: databricks bundle run ingest_rest_api --target ci
 
       - name: Run — 03 · ingest unstructured (text + files)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         run: databricks bundle run ingest_unstructured --target ci
 
       - name: Run — 04 · ML (features -> training -> inference)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         # Three tasks with real dependencies: if the model fails its quality gate,
         # nothing is registered, inference has nothing to load, and this fails.
         # That is correct. Scoring with an unvetted model is worse than not scoring.
         run: databricks bundle run ml_taxi_fare --target ci
 
       - name: Run — 05 · RAG (embed -> retrieve -> answer)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         run: databricks bundle run rag_documents --target ci
 
       - name: Run — 06 · distillation (LLM labels -> DistilBERT learns)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         # The slowest job by far: fine-tuning on CPU takes about ten minutes.
         run: databricks bundle run finetune_llm --target ci
 
       - name: Run — 07 · data quality (contract, quarantine, fail loudly)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         run: databricks bundle run data_quality --target ci
 
       - name: Run — 08 · model monitoring (drift, decay, rollback)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         # Must come after 04: it monitors 04's model and reads its feature table.
         # It deliberately registers a broken model and rolls it back, so it leaves
         # the registry with a healthy production version — 04's inference task on
@@ -96,7 +109,7 @@ jobs:
         run: databricks bundle run model_monitoring --target ci
 
       - name: Run — 10 · frameworks (sklearn vs PyTorch vs TensorFlow)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         # Must come after 04: all three trainers read its feature table. The three
         # trainers run in parallel and each installs a DIFFERENT framework —
         # TensorFlow needs numpy<2, which sklearn and MLflow cannot live with, so
@@ -104,7 +117,7 @@ jobs:
         run: databricks bundle run ml_frameworks --target ci
 
       - name: Run — 11 · run anywhere (the same task, on Databricks)
-        if: steps.creds.outputs.ok == 'true' && inputs.run_jobs != false
+        if: steps.creds.outputs.ok == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_jobs)
         # The bundle has always had this job; deploy.yml never ran it, so its Databricks
         # run was proven by hand and not enforced. The portability matrix asserts that
         # local, Docker, Kubernetes and s3a:// agree with each other; this is the run
