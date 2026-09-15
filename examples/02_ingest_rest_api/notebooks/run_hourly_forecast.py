@@ -75,7 +75,22 @@ for name, df in outputs.items():
 
 fc = spark.table(catalog + "." + schema + ".hourly_forecast")
 n = fc.count()
-print("forecast hours:", n)
+
+# What THIS run produced, which is not the same as what the table holds.
+#
+# The output is `mode: merge` on (city, observed_at), so the table accumulates.
+# The config comment says consecutive runs overlap by six days, and that is true
+# of a task running daily. Two months apart the windows do not overlap at all:
+# nothing is corrected, everything is inserted, and the table grows by a full 168
+# every time. It sat at 336 the first time this notebook was ever run twice.
+#
+# So the row count of the whole table is not evidence about this run. The window
+# from today forward is, because every row in it was either written or corrected
+# by the run that just finished.
+window = fc.filter("observed_at >= current_date()")
+n_window = window.count()
+print("forecast hours in the table:", n)
+print("forecast hours from today :", n_window)
 
 fc.groupBy("conditions").count().orderBy("count", ascending=False).show()
 fc.select("observed_at", "temperature_2m", "precipitation", "wind_speed_10m", "conditions").orderBy(
@@ -86,8 +101,9 @@ assert n > 0, "the API returned nothing — can this workspace reach api.open-me
 
 # 7 days x 24 hours. If the arrays were exploded separately instead of zipped, this
 # would be 168 x 168 = 28,224 rows of nonsense, each hour paired with somebody
-# else's temperature.
-assert 150 < n < 200, "expected ~168 hourly rows, got " + str(n)
+# else's temperature. Asserted on the forward window, so it stays true on the
+# hundredth run as well as the first.
+assert 150 < n_window < 200, "expected ~168 hourly rows from today, got " + str(n_window)
 assert fc.filter("temperature_2m IS NULL").count() == 0, "measures did not line up with hours"
 
 print("OK")
