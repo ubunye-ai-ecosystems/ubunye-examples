@@ -271,3 +271,19 @@ assert final.metrics["test_mae"] < 1.0, "production is not a healthy model"
 print("production:", final.version, "| test_mae", round(final.metrics["test_mae"], 4))
 print()
 print("OK")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Hand the numbers back out of the workspace
+# MAGIC
+# MAGIC Printed output stays inside the workspace. `dbutils.notebook.exit` is the one
+# MAGIC channel a job task has back to whatever started it, and
+# MAGIC `databricks bundle run` prints it, so these land in the build log where anyone
+# MAGIC can read them without a login and without a screenshot that goes stale.
+
+# COMMAND ----------
+
+import json
+
+dbutils.notebook.exit(json.dumps({"example": "08_model_monitoring", "broken_version": bad_version.version, "broken_live_mae": round(b["live_mae"], 3), "rolled_back_to": after_b.version, "production_after": final.version, "production_test_mae": round(final.metrics["test_mae"], 4)}, default=str))

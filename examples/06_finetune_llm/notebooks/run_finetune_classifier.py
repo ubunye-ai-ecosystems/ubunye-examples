@@ -154,3 +154,19 @@ assert scored["agrees_with_teacher"].mean() > 0.7, "the student does not reprodu
 
 print()
 print("OK")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Hand the numbers back out of the workspace
+# MAGIC
+# MAGIC Printed output stays inside the workspace. `dbutils.notebook.exit` is the one
+# MAGIC channel a job task has back to whatever started it, and
+# MAGIC `databricks bundle run` prints it, so these land in the build log where anyone
+# MAGIC can read them without a login and without a screenshot that goes stale.
+
+# COMMAND ----------
+
+import json
+
+dbutils.notebook.exit(json.dumps({"example": "06_finetune_llm", "agreement_with_teacher": round(float(scored["agrees_with_teacher"].mean()), 3), "held_out_reviews": int(len(scored)), "classes_predicted": sorted(map(str, predicted_classes))}, default=str))

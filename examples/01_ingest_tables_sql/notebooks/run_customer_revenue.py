@@ -75,9 +75,27 @@ for name, df in outputs.items():
 
 # COMMAND ----------
 
+rows_written = {}
 for table in ["franchise_revenue", "product_revenue"]:
     n = spark.table(catalog + "." + schema + "." + table).count()
+    rows_written[table] = n
     print(table, "->", n, "rows")
     assert n > 0, table + " is empty"
 
 print("OK")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Hand the numbers back out of the workspace
+# MAGIC
+# MAGIC Printed output stays inside the workspace. `dbutils.notebook.exit` is the one
+# MAGIC channel a job task has back to whatever started it, and
+# MAGIC `databricks bundle run` prints it, so these land in the build log where anyone
+# MAGIC can read them without a login and without a screenshot that goes stale.
+
+# COMMAND ----------
+
+import json
+
+dbutils.notebook.exit(json.dumps({"example": "01_ingest_tables_sql", "rows_written": rows_written}, default=str))

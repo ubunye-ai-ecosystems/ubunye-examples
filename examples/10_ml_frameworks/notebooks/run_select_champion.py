@@ -131,3 +131,19 @@ if verdict != "clear win":
 
 print()
 print("OK")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Hand the numbers back out of the workspace
+# MAGIC
+# MAGIC Printed output stays inside the workspace. `dbutils.notebook.exit` is the one
+# MAGIC channel a job task has back to whatever started it, and
+# MAGIC `databricks bundle run` prints it, so these land in the build log where anyone
+# MAGIC can read them without a login and without a screenshot that goes stale.
+
+# COMMAND ----------
+
+import json
+
+dbutils.notebook.exit(json.dumps({"example": "10_ml_frameworks", "champion": champion[0]["framework"], "score_rmse": round(champion[0]["score_rmse"], 4), "margin_pct": round(margin, 1), "verdict": verdict}, default=str))

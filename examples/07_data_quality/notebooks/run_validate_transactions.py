@@ -124,3 +124,19 @@ assert results.select("rule").distinct().count() == 7, "a rule vanished from the
 print()
 print("all 5 injected faults quarantined, none leaked")
 print("OK")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Hand the numbers back out of the workspace
+# MAGIC
+# MAGIC Printed output stays inside the workspace. `dbutils.notebook.exit` is the one
+# MAGIC channel a job task has back to whatever started it, and
+# MAGIC `databricks bundle run` prints it, so these land in the build log where anyone
+# MAGIC can read them without a login and without a screenshot that goes stale.
+
+# COMMAND ----------
+
+import json
+
+dbutils.notebook.exit(json.dumps({"example": "07_data_quality", "rules_checked": this_run.count(), "faults_injected": len(injected), "faults_quarantined": len(caught & set(injected)), "leaked_into_clean": leaked}, default=str))
