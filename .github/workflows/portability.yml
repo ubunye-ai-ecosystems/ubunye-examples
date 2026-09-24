@@ -293,7 +293,7 @@ jobs:
           echo "fingerprint=$(grep -oP 'FINGERPRINT=\K.*' out.txt)" >> "$GITHUB_OUTPUT"
 
   object-store:
-    name: object storage (s3a:// via MinIO)
+    name: object storage (s3a:// via an S3 server)
     runs-on: ubuntu-latest
     outputs:
       fingerprint: ${{ steps.run.outputs.fingerprint }}
@@ -316,29 +316,26 @@ jobs:
       - name: Install the released engine + Spark + Delta
         run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "$ENGINE" "requests>=2.28"
 
-      - name: Start MinIO — a real S3-compatible server
-        # From quay.io and pinned: MinIO stopped publishing to Docker Hub, where
-        # `minio/minio` now answers "pull access denied".
+      - name: Start an S3-compatible server (moto, from pip)
+        # MinIO no longer hands out free images: Docker Hub answers "pull access
+        # denied" and quay.io "unauthorized" (Bitnami withdrew theirs before that).
+        # moto's server speaks the S3 API and installs with pip, so no registry can
+        # take it away.
         #
-        # Started as a plain container, NOT a `services:` block. The official minio
-        # image needs a `server /data` command, and GitHub service containers cannot
-        # override a command. (The first version used bitnami/minio, which starts a
-        # server by default — and Bitnami has since withdrawn their public `latest`
-        # tags, so the pull failed with `manifest unknown`.)
-        #
-        # Not a mock and not a stub: the pipeline talks to this through Hadoop's actual
-        # S3A connector, the same one it would use against AWS.
+        # The pipeline still talks to it through Hadoop's real S3A connector, the
+        # same one it would use against AWS.
         run: |
-          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=ubunye             -e MINIO_ROOT_PASSWORD=ubunye-secret             quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          pip install -q "moto[server]>=5"
+          nohup moto_server -H 127.0.0.1 -p 9000 > moto.log 2>&1 &
 
-      - name: Wait for MinIO, and stage the corpus INTO the bucket
+      - name: Wait for the server, and stage the corpus INTO the bucket
         # The bootstrap is the platform's job. On Databricks a notebook copies the
         # corpus to a volume; here we put it in an object store. The pipeline neither
         # knows nor cares which.
         run: |
           set -euo pipefail
           for i in $(seq 1 30); do
-            curl -sf http://localhost:9000/minio/health/live && break || sleep 2
+            curl -s -o /dev/null http://localhost:9000/ && break || sleep 2
           done
           aws --endpoint-url http://localhost:9000 s3 mb s3://ubunye 2>/dev/null || true
           aws --endpoint-url http://localhost:9000 s3 cp             examples/11_run_anywhere/data/corpus/ s3://ubunye/corpus/ --recursive
