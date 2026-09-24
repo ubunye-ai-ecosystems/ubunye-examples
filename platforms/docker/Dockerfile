@@ -24,7 +24,8 @@ RUN JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" \
 # which looks like a config error and is not. Pin both, together, on purpose.
 ARG PYSPARK_VERSION=3.5.3
 ARG DELTA_VERSION=3.2.0
-ARG UBUNYE_VERSION=0.3.0
+# The engine as a pip requirement: a release, or a branch archive to test one.
+ARG UBUNYE_ENGINE="ubunye-engine[spark,ml]==0.3.0"
 
 # `requests` is NOT a runtime dependency of the engine — it sits in the `dev` extra.
 # So `pip install ubunye-engine[spark]` gives you a rest_api reader that cannot make a
@@ -33,7 +34,7 @@ ARG UBUNYE_VERSION=0.3.0
 RUN pip install --no-cache-dir \
       "pyspark==${PYSPARK_VERSION}" \
       "delta-spark==${DELTA_VERSION}" \
-      "ubunye-engine[spark,ml]==${UBUNYE_VERSION}" \
+      "${UBUNYE_ENGINE}" \
       "requests>=2.28"
 
 # Delta and the JDBC driver are JVM artifacts, and pip does not install JARs. The

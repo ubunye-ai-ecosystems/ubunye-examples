@@ -16,6 +16,17 @@ on:
   pull_request:
     paths: ["examples/11_run_anywhere/**", "platforms/**", ".github/workflows/portability.yml"]
   workflow_dispatch:
+    inputs:
+      engine:
+        description: >-
+          The engine to test, as a pip requirement with the spark and ml extras
+          (a release pin, or a branch archive URL to test unreleased code).
+        required: false
+
+# Every job installs this one engine: a release by default, or whatever the
+# dispatch asks for, so a release candidate runs the whole matrix before PyPI.
+env:
+  ENGINE: ${{ inputs.engine || 'ubunye-engine[spark,ml]==0.3.0' }}
 
 jobs:
   local:
@@ -39,7 +50,7 @@ jobs:
         # a request. It works on Databricks purely because DBR preinstalls it. This
         # step failed with `No module named 'requests'` the first time example 02 ran
         # off Databricks — which is the only place the bug is visible.
-        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark,ml]==0.3.0" "requests>=2.28"
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "$ENGINE" "requests>=2.28"
 
       - name: Run the task
         id: run
@@ -211,7 +222,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build the image
-        run: docker build -f platforms/docker/Dockerfile -t ubunye-portable:ci .
+        run: docker build -f platforms/docker/Dockerfile --build-arg UBUNYE_ENGINE="$ENGINE" -t ubunye-portable:ci .
 
       - name: Run the task in the container
         id: run
@@ -235,7 +246,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build the image
-        run: docker build -f platforms/docker/Dockerfile -t ubunye-portable:ci .
+        run: docker build -f platforms/docker/Dockerfile --build-arg UBUNYE_ENGINE="$ENGINE" -t ubunye-portable:ci .
 
       - name: Create a cluster
         uses: helm/kind-action@v1
@@ -279,7 +290,7 @@ jobs:
         with: { python-version: "3.11" }
 
       - name: Install the released engine + Spark + Delta
-        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark]==0.3.0" "requests>=2.28"
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "$ENGINE" "requests>=2.28"
 
       - name: Start MinIO — a real S3-compatible server
         # Started as a plain container, NOT a `services:` block. The official minio
@@ -331,7 +342,7 @@ jobs:
         with: { python-version: "3.11" }
 
       - name: Install the released engine + Spark + Delta
-        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark]==0.3.0" "requests>=2.28"
+        run: pip install "pyspark==3.5.3" "delta-spark==3.2.0" "$ENGINE" "requests>=2.28"
 
       - name: Submit the job the way a cloud does
         id: run
@@ -462,7 +473,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build the base image
-        run: docker build -f platforms/docker/Dockerfile -t ubunye-portable:ci .
+        run: docker build -f platforms/docker/Dockerfile --build-arg UBUNYE_ENGINE="$ENGINE" -t ubunye-portable:ci .
 
       - name: Build the model image — weights baked IN
         # The weights are downloaded at BUILD time, then HF_HUB_OFFLINE=1 forbids the
@@ -515,7 +526,7 @@ jobs:
         # three frameworks cannot share one interpreter, and the task is the unit of
         # isolation. Pinning them together is the only thing that makes them coexist.
         run: |
-          pip install "pyspark==3.5.3" "delta-spark==3.2.0" "ubunye-engine[spark,ml]==0.3.0"                       "torch>=2.2" --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install "pyspark==3.5.3" "delta-spark==3.2.0" "$ENGINE"                       "torch>=2.2" --extra-index-url https://download.pytorch.org/whl/cpu
           pip install "tensorflow" "numpy<2" "protobuf<5"
 
       - name: Seed, engineer features, then race the three frameworks
