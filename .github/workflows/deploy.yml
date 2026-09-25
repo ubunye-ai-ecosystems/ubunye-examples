@@ -18,6 +18,13 @@ on:
         description: "Run the jobs after deploying (not just deploy them)"
         type: boolean
         default: true
+      engine:
+        description: >-
+          Test an unreleased engine: a pip URL (for example a branch archive .zip).
+          Every notebook then installs it, with its own extras, instead of the
+          released pin. Empty means the released pin.
+        required: false
+        default: ""
 
 # NOTE ON THE `if:` GUARDS BELOW
 # Every run step is gated on `github.event_name != 'workflow_dispatch' || inputs.run_jobs`
@@ -59,6 +66,29 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
             echo "::warning::No Databricks credentials — skipping deploy."
           fi
+
+      - name: Test another engine (only when a dispatch names one)
+        if: steps.creds.outputs.ok == 'true' && github.event_name == 'workflow_dispatch' && inputs.engine != ''
+        env:
+          ENGINE_URL: ${{ inputs.engine }}
+        # The bundle deploys the working tree, so rewriting each notebook's pin here
+        # is all it takes; the repo's notebooks keep the released pin.
+        run: |
+          python - <<'PY'
+          import os, pathlib, re
+          url = os.environ["ENGINE_URL"]
+          pin = re.compile(r'"ubunye-engine\[([a-z,]+)\]==[0-9.]+"')
+          changed = 0
+          for path in sorted(pathlib.Path("examples").rglob("notebooks/*.py")):
+              text = path.read_text(encoding="utf-8")
+              new, n = pin.subn(lambda m: f'"ubunye-engine[{m.group(1)}] @ {url}"', text)
+              if n:
+                  path.write_text(new, encoding="utf-8")
+                  changed += n
+          assert changed, "no engine pin found to replace"
+          print(f"{changed} notebooks now install {url}")
+          PY
+          echo "### Databricks ran engine: $ENGINE_URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate
         if: steps.creds.outputs.ok == 'true'

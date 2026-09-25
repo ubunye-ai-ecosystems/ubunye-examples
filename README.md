@@ -5,7 +5,7 @@ Every one of them runs on Databricks, deploys as a Databricks Asset Bundle, and
 reads data that already exists in your workspace — nothing to upload, no API keys,
 no cloud storage to configure.
 
-They install the engine from PyPI (`ubunye-engine==0.3.0`), so what you run here is
+They install the engine from PyPI (`ubunye-engine==0.7.0`), so what you run here is
 what you get from `pip install` — not some unreleased branch.
 
 **Examples 01–08 have been run on real Databricks.** Not validated, not reviewed — run,
@@ -175,7 +175,7 @@ writable from serverless compute — the executors cannot see the driver's disk.
 ## Tests
 
 ```bash
-pip install "ubunye-engine[spark,ml]==0.3.0" pytest pandas scikit-learn
+pip install "ubunye-engine[spark,ml]==0.7.0" pytest pandas scikit-learn
 pytest examples/*/tests
 ```
 
