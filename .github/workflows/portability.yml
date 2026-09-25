@@ -26,7 +26,7 @@ on:
 # Every job installs this one engine: a release by default, or whatever the
 # dispatch asks for, so a release candidate runs the whole matrix before PyPI.
 env:
-  ENGINE: ${{ inputs.engine || 'ubunye-engine[spark,ml]==0.3.0' }}
+  ENGINE: ${{ inputs.engine || 'ubunye-engine[spark,ml]==0.7.0' }}
 
 jobs:
   local:

@@ -19,7 +19,7 @@ dbutils.widgets.dropdown("mode", "PROD", ["DEV", "PROD"], "Run mode")
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine[spark,ml]==0.3.0"
+# MAGIC %pip install "ubunye-engine[ml]==0.7.0"
 
 # COMMAND ----------
 

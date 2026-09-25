@@ -25,7 +25,7 @@ RUN JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" \
 ARG PYSPARK_VERSION=3.5.3
 ARG DELTA_VERSION=3.2.0
 # The engine as a pip requirement: a release, or a branch archive to test one.
-ARG UBUNYE_ENGINE="ubunye-engine[spark,ml]==0.3.0"
+ARG UBUNYE_ENGINE="ubunye-engine[spark,ml]==0.7.0"
 
 # `requests` is NOT a runtime dependency of the engine — it sits in the `dev` extra.
 # So `pip install ubunye-engine[spark]` gives you a rest_api reader that cannot make a
