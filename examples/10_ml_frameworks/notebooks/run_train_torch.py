@@ -19,7 +19,7 @@ dbutils.widgets.dropdown("mode", "PROD", ["DEV", "PROD"], "Run mode")
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine[ml]==0.7.0" torch
+# MAGIC %pip install "ubunye-engine[ml]==0.8.0" torch
 
 # COMMAND ----------
 

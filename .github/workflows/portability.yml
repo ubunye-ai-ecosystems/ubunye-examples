@@ -26,7 +26,7 @@ on:
 # Every job installs this one engine: a release by default, or whatever the
 # dispatch asks for, so a release candidate runs the whole matrix before PyPI.
 env:
-  ENGINE: ${{ inputs.engine || 'ubunye-engine[spark,ml]==0.7.0' }}
+  ENGINE: ${{ inputs.engine || 'ubunye-engine[spark,ml]==0.8.0' }}
 
 jobs:
   local:
@@ -545,13 +545,13 @@ jobs:
         with: { python-version: "3.11" }
 
       - name: Install the three frameworks
-        # TensorFlow needs numpy<2, which scipy and MLflow cannot live with unpinned.
+        # Current TensorFlow works with numpy 2, which current pandas requires, so numpy is not pinned.
         # This is a separate JOB for the same reason example 10 uses separate TASKS: the
         # three frameworks cannot share one interpreter, and the task is the unit of
         # isolation. Pinning them together is the only thing that makes them coexist.
         run: |
           pip install "pyspark==3.5.3" "delta-spark==3.2.0" "$ENGINE"                       "torch>=2.2" --extra-index-url https://download.pytorch.org/whl/cpu
-          pip install "tensorflow" "numpy<2" "protobuf<5"
+          pip install "tensorflow" "protobuf<5"
 
       - name: Seed, engineer features, then race the three frameworks
         env:

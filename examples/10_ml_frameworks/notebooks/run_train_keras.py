@@ -33,7 +33,7 @@ dbutils.widgets.dropdown("mode", "PROD", ["DEV", "PROD"], "Run mode")
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine[ml]==0.7.0" tensorflow "numpy<2" "protobuf<5"
+# MAGIC %pip install "ubunye-engine[ml]==0.8.0" tensorflow "numpy<2" "protobuf<5"
 
 # COMMAND ----------
 
