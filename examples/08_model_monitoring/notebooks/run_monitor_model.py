@@ -39,7 +39,7 @@ dbutils.widgets.dropdown("mode", "PROD", ["DEV", "PROD"], "Run mode")
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine[ml]==0.7.0"
+# MAGIC %pip install "ubunye-engine[ml]==0.8.0"
 
 # COMMAND ----------
 
@@ -86,6 +86,25 @@ print("registry  :", model_store)
 
 import ubunye
 from ubunye.models.registry import ModelRegistry, ModelStage
+import uuid
+
+# Since 0.8.0 the engine refuses to append the same batch twice: a task plus its
+# variables is one batch, and a second run of it would add every row again. This
+# notebook monitors the SAME window twice on purpose (scenario A, then B), and a
+# CI job runs it again on every deploy. So each run of the monitor gets its own
+# batch: the scenario it plays, and an id for this execution of the notebook.
+notebook_run = uuid.uuid4().hex[:12]
+
+
+def monitor(scenario):
+    return ubunye.run_task(
+        task_dir=task_dir,
+        dt=dt,
+        mode=mode,
+        lineage=True,
+        variables={"scenario": scenario, "notebook_run": notebook_run},
+    )
+
 
 registry = ModelRegistry(model_store)
 FQ = catalog + "." + schema
@@ -148,7 +167,7 @@ print("champion:", healthiest.version, "| its test_mae:", round(healthiest.metri
 os.environ["DRIFT_FACTOR"] = "1.35"
 
 before_a = production().version
-ubunye.run_task(task_dir=task_dir, dt=dt, mode=mode, lineage=True)
+monitor("world_moved")
 show_run()
 
 # COMMAND ----------
@@ -219,7 +238,7 @@ print("promoted", bad_version.version, "with an honest test_mae of", round(test_
 
 os.environ["DRIFT_FACTOR"] = "1.0"  # the world is fine. The model is not.
 
-ubunye.run_task(task_dir=task_dir, dt=dt, mode=mode, lineage=True)
+monitor("bad_promotion")
 show_run()
 
 # COMMAND ----------
