@@ -21,6 +21,10 @@
 #     databricks bundle deploy --target dev
 #     databricks bundle run jdbc_ingest --target dev
 
+# ubunye_run_records, git_commit, git_branch and deploy_target are read by
+# ubunye.notebook() (engine 0.9.2): where the run record goes, and which commit,
+# branch and target the job came from.
+
 bundle:
   name: ubunye-examples-jdbc
 
@@ -85,6 +89,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
 targets:
   dev:
