@@ -175,3 +175,12 @@ waits for all three.
 |---|---|
 | `fare_bench_metrics` | every metric of every framework, appended forever |
 | `fare_bench_leaderboard` | who is winning right now, and whether the lead means anything |
+
+## Run records
+
+The notebook runs the task as one recorded run (engine 0.9.2):
+`with ubunye.notebook(...) as run:` then `run.read()`, `run.transform(sources)`,
+`run.write(outputs)`. Each run's record (who ran it, from which commit, what it read
+and wrote, and the stage that failed if one did) goes to
+`<catalog>.<schema>.uby_run_records`, the table the job parameter
+`ubunye_run_records` names in `databricks.yml`.
