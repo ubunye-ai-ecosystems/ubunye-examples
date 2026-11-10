@@ -116,3 +116,12 @@ matter are in `tests/test_psi.py`, which proves the calculation cannot go **sile
 including the bucketing bug where live values outside the training range are dropped,
 the survivors renormalise back to the reference shape, and PSI reports a reassuring
 `0.00` about the most alarming rows in the batch.
+
+## Run records
+
+The notebook runs the task as one recorded run (engine 0.9.2):
+`with ubunye.notebook(...) as run:` then `run.read()`, `run.transform(sources)`,
+`run.write(outputs)`. Each run's record (who ran it, from which commit, what it read
+and wrote, and the stage that failed if one did) goes to
+`<catalog>.<schema>.uby_run_records`, the table the job parameter
+`ubunye_run_records` names in `databricks.yml`.

@@ -19,14 +19,14 @@ CONFIG:
   inputs:
     labelled:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.labelled_reviews"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.labelled_reviews"
 
   transform: {}
 
   outputs:
     student_metrics:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.student_model_metrics"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.student_model_metrics"
       mode: append
       file_format: delta
       options:

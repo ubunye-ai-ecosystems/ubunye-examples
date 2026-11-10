@@ -6,6 +6,14 @@
 # Databricks workspace has. Adding a cluster spec here would make every example
 # undeployable for most of the people it is written for.
 
+# Every task also gets four job parameters that ubunye.notebook() reads (engine 0.9.2):
+#   ubunye_run_records  the Delta table each run's record goes to:
+#                       <catalog>.<schema>.uby_run_records
+#   git_commit, git_branch, deploy_target
+#                       which commit, branch and bundle target the job was deployed
+#                       from; every run record carries them, so a record answers
+#                       "which code made this table?" without a guess.
+
 bundle:
   name: ubunye-examples
 
@@ -40,6 +48,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     ingest_rest_api:
       name: "[ubunye] 02 · ingest structured — a public REST API"
@@ -54,6 +66,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     ingest_unstructured:
       name: "[ubunye] 03 · ingest unstructured — text + files"
@@ -68,6 +84,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     # ---- ML --------------------------------------------------------------
     # Two tasks, in order. Inference depends on engineering because it loads the
@@ -87,6 +107,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         - task_key: model_training
           depends_on:
@@ -99,6 +123,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         # Depends on training because it loads the model training registered. If
         # the model failed its gate, nothing was registered, this task has nothing
@@ -115,6 +143,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     rag_documents:
       name: "[ubunye] 05 · RAG — embed, then retrieve and answer"
@@ -129,6 +161,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         # Retrieval depends on embedding for the obvious reason, but the tasks are
         # separate for a less obvious one: embedding is expensive and changes only
@@ -145,6 +181,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     finetune_llm:
       name: "[ubunye] 06 · Distillation — an LLM labels, a small model learns"
@@ -159,6 +199,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         - task_key: finetune_classifier
           depends_on:
@@ -171,6 +215,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     data_quality:
       name: "[ubunye] 07 · Data quality — a contract, enforced"
@@ -185,6 +233,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     model_monitoring:
       name: "[ubunye] 08 · Model monitoring — drift, decay, rollback"
@@ -199,6 +251,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     ml_frameworks:
       name: "[ubunye] 10 · Frameworks — sklearn vs PyTorch vs TensorFlow"
@@ -216,6 +272,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         - task_key: train_torch
           notebook_task:
@@ -226,6 +286,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         - task_key: train_keras
           notebook_task:
@@ -236,6 +300,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
         # Waits for all three. A leaderboard built while a trainer is still running
         # would rank whoever happened to finish first.
@@ -252,6 +320,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
     run_anywhere:
       name: "[ubunye] 11 · Run anywhere — the same task, on Databricks"
@@ -266,6 +338,10 @@ resources:
               schema: ${var.schema}
               dt: ${var.data_timestamp}
               mode: PROD
+              ubunye_run_records: ${var.catalog}.${var.schema}.uby_run_records
+              git_commit: ${bundle.git.commit}
+              git_branch: ${bundle.git.branch}
+              deploy_target: ${bundle.target}
 
 targets:
   # For a human deploying from a laptop. `mode: development` prefixes the job

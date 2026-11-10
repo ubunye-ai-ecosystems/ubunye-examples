@@ -59,8 +59,9 @@ CONFIG:
       driver: "org.postgresql.Driver"
       user: "{{ env.PG_USER | default('reader') }}"
       password: "{{ env.PG_PASSWORD | default('NWDMCE5xdipIjRrp') }}"
+      # RNAcentral renamed the sequence id column `upi` to `urs` (seen 2026-11-10).
       sql: |
-        SELECT id, upi, len, md5
+        SELECT id, urs, len, md5
         FROM rnacen.rna
         WHERE id <= 200000
 
@@ -84,7 +85,7 @@ CONFIG:
   outputs:
     rna_databases:
       format: "{{ env.UBUNYE_SINK | default('unity') }}"
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rna_databases"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.rna_databases"
       path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/rna_databases"
       mode: merge
       merge_keys: ["id"]
@@ -95,7 +96,7 @@ CONFIG:
 
     rna_sequence_profile:
       format: "{{ env.UBUNYE_SINK | default('unity') }}"
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rna_sequence_profile"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.rna_sequence_profile"
       path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/rna_sequence_profile"
       mode: overwrite
       file_format: delta

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run ANY example's task on open-source Spark — local, in Docker, or in a pod.
 #
-#   platforms/run_task.sh <example-dir> <usecase> <package> <task> [more tasks...]
+#   platforms/run_task.sh <example-dir> <usecase> <pipeline> <task> [more tasks...]
 #
 # e.g. platforms/run_task.sh examples/02_ingest_rest_api weather ingestion hourly_forecast
 #
@@ -10,7 +10,7 @@ set -euo pipefail
 
 EXAMPLE="${1:?example dir, e.g. examples/02_ingest_rest_api}"
 USECASE="${2:?usecase}"
-PACKAGE="${3:?package}"
+PIPELINE="${3:?pipeline}"
 shift 3
 TASKS=("$@")
 [ ${#TASKS[@]} -gt 0 ] || { echo "at least one task required" >&2; exit 1; }
@@ -42,7 +42,7 @@ for t in "${TASKS[@]}"; do TASK_ARGS+=(-t "$t"); done
 ubunye run \
   -d "${EXAMPLE}/pipelines" \
   -u "${USECASE}" \
-  -p "${PACKAGE}" \
+  -p "${PIPELINE}" \
   "${TASK_ARGS[@]}" \
   -m PROD \
   -dt "${DT:-2026-07-13}"

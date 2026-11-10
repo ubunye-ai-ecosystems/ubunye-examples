@@ -36,11 +36,11 @@ CONFIG:
       sql: |
         WITH latest AS (
           SELECT framework, max(recorded_at) AS recorded_at
-          FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_metrics
+          FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.fare_bench_metrics
           GROUP BY framework
         )
         SELECT m.*
-        FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_metrics m
+        FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.fare_bench_metrics m
         JOIN latest USING (framework, recorded_at)
 
   transform: {}
@@ -48,7 +48,7 @@ CONFIG:
   outputs:
     fare_bench_leaderboard:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_leaderboard"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.fare_bench_leaderboard"
       # Overwrite, not append: this is a "who is winning right now" table, and there
       # is exactly one right answer at a time. The history lives in fare_bench_metrics.
       mode: overwrite

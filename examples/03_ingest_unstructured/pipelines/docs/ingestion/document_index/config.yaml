@@ -26,7 +26,7 @@ CONFIG:
   inputs:
     reviews:
       format: unity
-      table: "{{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.media_customer_reviews"
+      table: "{{ env.SOURCE_CATALOG | default('samples') | ident }}.bakehouse.media_customer_reviews"
 
     # The corpus is committed to this repo and copied onto a UC volume by
     # notebooks/00_setup.py. Nothing is downloaded — serverless compute cannot
@@ -48,7 +48,7 @@ CONFIG:
     # "a document with text" by the time they land here.
     documents:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.documents"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.documents"
       mode: merge
       merge_keys: ["doc_id"]
       file_format: delta
@@ -60,7 +60,7 @@ CONFIG:
     # small, overlapping windows with a stable id back to the source document.
     document_chunks:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.document_chunks"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.document_chunks"
       mode: merge
       merge_keys: ["chunk_id"]
       file_format: delta

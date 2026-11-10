@@ -77,11 +77,12 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           url = os.environ["ENGINE_URL"]
-          pin = re.compile(r'"ubunye-engine\[([a-z,]+)\]==[0-9.]+"')
+          # Extras are optional: most notebooks pin plain "ubunye-engine==X".
+          pin = re.compile(r'"ubunye-engine(\[[a-z,]+\])?==[0-9.]+"')
           changed = 0
           for path in sorted(pathlib.Path("examples").rglob("notebooks/*.py")):
               text = path.read_text(encoding="utf-8")
-              new, n = pin.subn(lambda m: f'"ubunye-engine[{m.group(1)}] @ {url}"', text)
+              new, n = pin.subn(lambda m: f'"ubunye-engine{m.group(1) or ""} @ {url}"', text)
               if n:
                   path.write_text(new, encoding="utf-8")
                   changed += n

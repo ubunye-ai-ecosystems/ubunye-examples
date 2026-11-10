@@ -39,7 +39,7 @@ CONFIG:
       sql: |
         SELECT trip_distance, trip_minutes, pickup_hour, pickup_dow,
                pickup_zip, dropoff_zip, fare_amount
-        FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'train'
 
     # The world as it is now: the held-out scoring slice, with the true fares.
@@ -60,7 +60,7 @@ CONFIG:
         SELECT trip_distance, trip_minutes, pickup_hour, pickup_dow,
                pickup_zip, dropoff_zip,
                fare_amount * {{ env.DRIFT_FACTOR | default('1.35') }} AS fare_amount
-        FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'score'
 
   transform: {}
@@ -71,7 +71,7 @@ CONFIG:
     # before the finance team does.
     model_monitoring:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.model_monitoring"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.model_monitoring"
       mode: append
       file_format: delta
       options:
@@ -83,7 +83,7 @@ CONFIG:
     # would not help" with a number instead of a shrug.
     model_candidates:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.model_candidates"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.model_candidates"
       mode: append
       file_format: delta
       options:
@@ -93,7 +93,7 @@ CONFIG:
     # What the monitor DID about it. An alert nobody acts on is a log line.
     monitoring_incidents:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.monitoring_incidents"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.monitoring_incidents"
       mode: append
       file_format: delta
       options:

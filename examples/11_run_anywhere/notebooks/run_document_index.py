@@ -27,10 +27,11 @@ dbutils.widgets.text("catalog", "workspace", "Catalog")
 dbutils.widgets.text("schema", "ubunye_examples", "Schema")
 dbutils.widgets.text("dt", "2026-07-13", "Data timestamp")
 dbutils.widgets.dropdown("mode", "PROD", ["DEV", "PROD"], "Run mode")
+dbutils.widgets.text("ubunye_run_records", "", "Run records table (blank = <catalog>.<schema>.uby_run_records)")
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine==0.7.0"
+# MAGIC %pip install "ubunye-engine==0.9.2"
 
 # COMMAND ----------
 
@@ -46,6 +47,9 @@ catalog = dbutils.widgets.get("catalog")
 schema = dbutils.widgets.get("schema")
 dt = dbutils.widgets.get("dt")
 mode = dbutils.widgets.get("mode")
+# Where the run record goes. A job passes ubunye_run_records (see databricks.yml);
+# opened by hand, it is a table next to the outputs.
+run_records = dbutils.widgets.get("ubunye_run_records") or catalog + "." + schema + ".uby_run_records"
 task_dir = dbutils.widgets.get("task_dir")
 
 if not task_dir:
@@ -81,7 +85,12 @@ print("corpus   :", len(os.listdir(corpus)), "files")
 
 import ubunye
 
-outputs = ubunye.run_task(task_dir=task_dir, dt=dt, mode=mode, lineage=True)
+# One recorded run, three steps. Its run record (who ran it, from which commit,
+# what went in and out, and the stage that failed if one did) goes to run_records.
+with ubunye.notebook(task_dir, dt=dt, mode=mode, run_records=run_records) as run:
+    sources = run.read()              # READ: every input in config.yaml, one DataFrame each, nothing changed yet
+    outputs = run.transform(sources)  # TRANSFORM: transformations.py, one DataFrame per output; all business logic is there
+    run.write(outputs)                # WRITE: data-quality rules first (nothing is written if one fails), then each output
 
 # COMMAND ----------
 

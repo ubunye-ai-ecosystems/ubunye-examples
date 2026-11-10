@@ -24,13 +24,13 @@ CONFIG:
     train:
       format: unity
       sql: |
-        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'train'
 
     test:
       format: unity
       sql: |
-        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'test'
 
   transform: {}
@@ -41,7 +41,7 @@ CONFIG:
     # and it is appended to forever.
     model_metrics:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_model_metrics"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_model_metrics"
       mode: append
       file_format: delta
       options:

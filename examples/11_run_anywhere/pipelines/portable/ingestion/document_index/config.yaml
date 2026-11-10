@@ -87,7 +87,7 @@ CONFIG:
       # abfss://. It is the portable workhorse of this repo.
       format: "{{ env.UBUNYE_SINK | default('s3') }}"
       path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/documents"
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.portable_documents"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.portable_documents"
       mode: merge
       merge_keys: ["doc_id"]
       file_format: delta
@@ -97,7 +97,7 @@ CONFIG:
     document_chunks:
       format: "{{ env.UBUNYE_SINK | default('s3') }}"
       path: "{{ env.UBUNYE_DATA_ROOT | default('file:///tmp/ubunye') }}/document_chunks"
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.portable_document_chunks"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.portable_document_chunks"
       mode: merge
       merge_keys: ["chunk_id"]
       file_format: delta

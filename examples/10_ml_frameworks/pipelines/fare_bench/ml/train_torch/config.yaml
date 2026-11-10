@@ -32,19 +32,19 @@ CONFIG:
     train:
       format: unity
       sql: |
-        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'train'
 
     test:
       format: unity
       sql: |
-        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'test'
 
     score:
       format: unity
       sql: |
-        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'score'
 
   transform: {}
@@ -55,7 +55,7 @@ CONFIG:
     # conflict. Three tasks overwriting one table would.
     fare_bench_metrics:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.fare_bench_metrics"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.fare_bench_metrics"
       mode: append
       file_format: delta
       options:

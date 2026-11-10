@@ -125,3 +125,12 @@ like a Spark bug and is not one.
 |---|---|---|
 | `rna_databases` | `merge` on `id` | the contributing databases — safe to re-run |
 | `rna_sequence_profile` | `overwrite` | the length distribution of the slice, and the partition count the read actually achieved |
+
+## Run records
+
+The notebook runs the task as one recorded run (engine 0.9.2):
+`with ubunye.notebook(...) as run:` then `run.read()`, `run.transform(sources)`,
+`run.write(outputs)`. Each run's record (who ran it, from which commit, what it read
+and wrote, and the stage that failed if one did) goes to
+`<catalog>.<schema>.uby_run_records`, the table the job parameter
+`ubunye_run_records` names in `databricks.yml`.
