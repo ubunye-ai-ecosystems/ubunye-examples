@@ -5,7 +5,7 @@ Every one of them runs on Databricks, deploys as a Databricks Asset Bundle, and
 reads data that already exists in your workspace — nothing to upload, no API keys,
 no cloud storage to configure.
 
-They install the engine from PyPI (`ubunye-engine==0.7.0`), so what you run here is
+They install the engine from PyPI (`ubunye-engine==0.9.2`), so what you run here is
 what you get from `pip install` — not some unreleased branch.
 
 **Examples 01–08 have been run on real Databricks.** Not validated, not reviewed — run,
@@ -24,7 +24,7 @@ glossed over.
 Every task is the same two files, whatever it does:
 
 ```
-<usecase>/<package>/<task>/
+<usecase>/<pipeline>/<task>/
     config.yaml          where the data comes from, where it goes, Spark settings
     transformations.py   the business rule
 ```
@@ -32,6 +32,29 @@ Every task is the same two files, whatever it does:
 That is the whole model. **ETL or ML is not a distinction the engine makes.**
 Training a model is a task. Scoring with one is a task. Aggregating a table is a
 task. They differ in what `transformations.py` says, not in shape.
+
+### The notebook is three steps
+
+Every job notebook runs its task the same way (engine 0.9.2):
+
+```python
+import ubunye
+
+with ubunye.notebook(task_dir, dt=dt, mode=mode, run_records=run_records) as run:
+    sources = run.read()              # READ: every input in config.yaml, one DataFrame each, nothing changed yet
+    outputs = run.transform(sources)  # TRANSFORM: transformations.py, one DataFrame per output; all business logic is there
+    run.write(outputs)                # WRITE: data-quality rules first (nothing is written if one fails), then each output
+```
+
+The `with` block is one run. Each step prints one line (what it did, how long it
+took), and the run ends with a **run record**: who ran it, from which git commit,
+branch and bundle target, what it read and wrote, and, when it fails, the stage it
+failed in. The rest of each notebook is setup before the block and checks after it.
+
+Config names that come from a variable go through `| ident`, so a catalog with a
+hyphen in its name works:
+`{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features`.
+A task that needs the batch date reads `self.dt` (example 04 partitions its scores by it).
 
 ---
 
@@ -164,18 +187,30 @@ databricks bundle deploy --target dev --var catalog=main --var schema=my_schema
 | | |
 |---|---|
 | Tables | `<catalog>.<schema>.*` |
+| Run records | `<catalog>.<schema>.uby_run_records` (one row per run, every example) |
 | Model registry | `/Volumes/<catalog>/<schema>/model_store` |
 | Document corpus | `/Volumes/<catalog>/<schema>/corpus` |
 
 The model registry lives on a **Unity Catalog volume** because `/tmp` is not
 writable from serverless compute — the executors cannot see the driver's disk.
 
+The bundle passes each task the job parameter `ubunye_run_records`
+(`<catalog>.<schema>.uby_run_records`), plus `git_commit`, `git_branch` and
+`deploy_target` from the bundle, and the notebook hands them to the engine. A notebook
+opened by hand writes its record to the same table. To see the latest runs:
+
+```sql
+SELECT task, status, started_at, ended_at, run_id
+FROM workspace.ubunye_examples.uby_run_records
+ORDER BY started_at DESC LIMIT 20
+```
+
 ---
 
 ## Tests
 
 ```bash
-pip install "ubunye-engine[spark,ml]==0.7.0" pytest pandas scikit-learn
+pip install "ubunye-engine[spark,ml]==0.9.2" pytest pandas scikit-learn
 pytest examples/*/tests
 ```
 
