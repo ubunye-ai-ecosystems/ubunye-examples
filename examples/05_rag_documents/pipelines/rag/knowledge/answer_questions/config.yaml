@@ -19,7 +19,7 @@ CONFIG:
   inputs:
     embeddings:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.chunk_embeddings"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.chunk_embeddings"
 
   transform: {}
 
@@ -28,7 +28,7 @@ CONFIG:
     # cannot trace back to its sources is not a retrieval system, it is a rumour.
     rag_answers:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.rag_answers"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.rag_answers"
       mode: overwrite
       file_format: delta
       options:

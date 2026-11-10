@@ -26,7 +26,7 @@ CONFIG:
   inputs:
     chunks:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.document_chunks"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.document_chunks"
 
   transform: {}
 
@@ -36,7 +36,7 @@ CONFIG:
     # changed chunks cost anything.
     chunk_embeddings:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.chunk_embeddings"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.chunk_embeddings"
       mode: merge
       merge_keys: ["chunk_id"]
       file_format: delta
