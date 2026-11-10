@@ -27,7 +27,7 @@ CONFIG:
     new_trips:
       format: unity
       sql: |
-        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features
+        SELECT * FROM {{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features
         WHERE split = 'score'
 
   transform: {}
@@ -35,7 +35,7 @@ CONFIG:
   outputs:
     predictions:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_fare_predictions"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_fare_predictions"
       mode: overwrite_partitions
       partitionBy: ["scored_date"]
       file_format: delta

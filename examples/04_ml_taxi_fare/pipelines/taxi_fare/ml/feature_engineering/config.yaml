@@ -34,7 +34,7 @@ CONFIG:
                fare_amount,
                pickup_zip,
                dropoff_zip
-        FROM {{ env.SOURCE_CATALOG | default('samples') }}.nyctaxi.trips
+        FROM {{ env.SOURCE_CATALOG | default('samples') | ident }}.nyctaxi.trips
         WHERE fare_amount BETWEEN 2.5 AND 200
           AND trip_distance BETWEEN 0.1 AND 100
 
@@ -43,7 +43,7 @@ CONFIG:
   outputs:
     taxi_features:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.taxi_features"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.taxi_features"
       mode: overwrite
       partitionBy: ["split"]
       file_format: delta

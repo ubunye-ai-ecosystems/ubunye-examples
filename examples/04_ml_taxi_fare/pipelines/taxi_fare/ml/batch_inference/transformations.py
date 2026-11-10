@@ -57,12 +57,17 @@ class TaxiFareBatchInference(Task):
         # rows, the honest fix is a Spark UDF or a served endpoint — not a bigger
         # driver.
         scored = model.predict(features.toPandas())
+
+        # The partition is the run's batch date (`-dt`, or the job's `dt`), not the
+        # wall clock. A backfill for 2026-07-01 run today must replace the
+        # 2026-07-01 partition, not today's. With no batch date, it is today.
+        scored_date = F.to_date(F.lit(self.dt)) if self.dt else F.current_date()
         spark = new_trips.sparkSession
 
         predictions = (
             spark.createDataFrame(scored)
             .withColumn("model_version", F.lit(version))
-            .withColumn("scored_date", F.current_date())
+            .withColumn("scored_date", scored_date)
             .withColumn("error", F.col("predicted_fare") - F.col("fare_amount"))
         )
 
