@@ -34,7 +34,7 @@ dbutils.widgets.text("ubunye_run_records", "", "Run records table (blank = <cata
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine[ml]==0.9.2" tensorflow "numpy<2" "protobuf<5" "pandas<3"
+# MAGIC %pip install "ubunye-engine[ml]==0.9.3" tensorflow "numpy<2" "protobuf<5" "pandas<3"
 
 # COMMAND ----------
 

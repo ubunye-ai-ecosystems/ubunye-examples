@@ -20,7 +20,7 @@ dbutils.widgets.text("ubunye_run_records", "", "Run records table (blank = <cata
 
 # COMMAND ----------
 
-# MAGIC %pip install "ubunye-engine==0.9.2" requests
+# MAGIC %pip install "ubunye-engine==0.9.3" requests
 
 # COMMAND ----------
 
