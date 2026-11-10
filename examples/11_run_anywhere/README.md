@@ -148,3 +148,12 @@ checks that they do, on every pull request.
 Ingestion and transformation port cleanly today. ML ports as far as the registry's
 filesystem assumption allows. Anything bound to a hosted model does not port at all,
 and saying so is more useful than a matrix of green ticks that quietly omits it.
+
+## Run records
+
+On Databricks the notebook runs the task as one recorded run (engine 0.9.2):
+`with ubunye.notebook(...) as run:` then `run.read()`, `run.transform(sources)`,
+`run.write(outputs)`. Its record goes to `<catalog>.<schema>.uby_run_records`, the
+table the job parameter `ubunye_run_records` names in `databricks.yml`. The other
+platforms run `ubunye run` (or `platforms/spark_entrypoint.py`) without records: the
+fingerprint is the evidence there, and the task is the same either way.
