@@ -26,7 +26,7 @@ CONFIG:
     # no egress, nothing to provision.
     franchises:
       format: unity
-      table: "{{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_franchises"
+      table: "{{ env.SOURCE_CATALOG | default('samples') | ident }}.bakehouse.sales_franchises"
 
     # The join runs in the warehouse; Spark receives the result. 20k transactions
     # joined to 30-odd franchises is not work worth moving.
@@ -43,8 +43,8 @@ CONFIG:
                t.paymentMethod,
                c.city    AS customer_city,
                c.country AS customer_country
-        FROM {{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_transactions t
-        LEFT JOIN {{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_customers c
+        FROM {{ env.SOURCE_CATALOG | default('samples') | ident }}.bakehouse.sales_transactions t
+        LEFT JOIN {{ env.SOURCE_CATALOG | default('samples') | ident }}.bakehouse.sales_customers c
           ON c.customerID = t.customerID
 
   transform: {}
@@ -55,7 +55,7 @@ CONFIG:
     # the difference between a job you can retry and a job you must babysit.
     franchise_revenue:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.franchise_revenue"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.franchise_revenue"
       mode: merge
       merge_keys: ["franchiseID", "revenue_month"]
       file_format: delta
@@ -67,7 +67,7 @@ CONFIG:
     # leaves every other month standing. `overwrite` would wipe the table.
     product_revenue:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.product_revenue"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.product_revenue"
       mode: overwrite_partitions
       partitionBy: ["revenue_month"]
       file_format: delta
