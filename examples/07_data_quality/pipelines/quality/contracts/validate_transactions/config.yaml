@@ -27,7 +27,7 @@ CONFIG:
   inputs:
     transactions:
       format: unity
-      table: "{{ env.SOURCE_CATALOG | default('samples') }}.bakehouse.sales_transactions"
+      table: "{{ env.SOURCE_CATALOG | default('samples') | ident }}.bakehouse.sales_transactions"
 
     # Deliberately broken rows, injected so the quarantine path actually executes.
     #
@@ -58,7 +58,7 @@ CONFIG:
     # rather than duplicates.
     clean_transactions:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.clean_transactions"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.clean_transactions"
       mode: merge
       merge_keys: ["transactionID"]
       file_format: delta
@@ -69,7 +69,7 @@ CONFIG:
     # The rows that did not, WITH the reason. This table is the bug report.
     quarantined_transactions:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.quarantined_transactions"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.quarantined_transactions"
       mode: overwrite
       file_format: delta
       options:
@@ -81,7 +81,7 @@ CONFIG:
     # anybody files a ticket.
     contract_results:
       format: unity
-      table: "{{ env.UBUNYE_CATALOG | default('workspace') }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') }}.contract_results"
+      table: "{{ env.UBUNYE_CATALOG | default('workspace') | ident }}.{{ env.UBUNYE_SCHEMA | default('ubunye_examples') | ident }}.contract_results"
       mode: append
       file_format: delta
       options:
